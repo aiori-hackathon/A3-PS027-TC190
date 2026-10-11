@@ -1,0 +1,14 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# IDE & OS
+.DS_Store
+.idea/
+.vscode/
+
+# Playwright browser downloads
+.local-browsers/
