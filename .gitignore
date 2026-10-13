@@ -9,6 +9,10 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+# scripts
+.docs
+.video_script.md    
+
 
 # Playwright browser downloads
 .local-browsers/

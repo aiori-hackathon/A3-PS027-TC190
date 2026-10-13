@@ -11,7 +11,7 @@
 
 As required by **Step 6 and Step 7** of the AIORI 3.0 Hackathon Guidelines, watch our team introduction video presenting our understanding of Problem Statement PS-027, assigned roles, and our proposed multi-stage auditing architecture:
 
-* **Video Link**: [https://youtu.be/A3-PS027-TC190-DEMO](https://youtu.be/A3-PS027-TC190-DEMO) *(Replace with your actual YouTube URL once published)*
+* **Video Link**: [https://youtu.be/L3E-40B2W-M](https://youtu.be/L3E-40B2W-M)
 * **Key Topics Covered**:
   1. Team Member Roles & Technical Responsibilities
   2. Problem Breakdown: The Apex AAAA Fallacy & Happy Eyeballs Masking
