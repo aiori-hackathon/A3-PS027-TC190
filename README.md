@@ -23,7 +23,7 @@ As required by **Step 6 and Step 7** of the AIORI 3.0 Hackathon Guidelines, watc
 ## 📑 Project Presentation (Step 5)
 
 Our Level 1 Hackathon Presentation follows the required 11-slide structure:
-* **Presentation File**: [`Proposed-structure-hackathon.pdf`](./Proposed-structure-hackathon.pdf)
+* **Official Presentation**: [`A3-PS027-TC190_AIORI-3_presentation.pdf`](./A3-PS027-TC190_AIORI-3_presentation.pdf) (also preserved as [`Proposed-structure-hackathon.pdf`](./Proposed-structure-hackathon.pdf))
   1. Title Slide (`A3-PS027-TC190`)
   2. Abstract & Problem Formulation
   3. Background & Industry Context
