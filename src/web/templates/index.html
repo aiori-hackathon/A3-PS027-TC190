@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPv6 Website & Dependency Readiness Auditor | Team A3-PS027-TC190</title>
+    <meta name="description" content="AIORI 3.0 PS-027 IPv6 Website and Dependency Readiness Auditor. Multi-stage failure isolation across DNS, TCP, TLS, and HTTP.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Header & Navigation -->
+    <header class="navbar">
+        <div class="brand-wrapper">
+            <span class="brand-badge">A3-PS027-TC190</span>
+            <h1 class="brand-title">IPv6 Dependency Readiness Auditor</h1>
+        </div>
+        <nav class="nav-links">
+            <button class="nav-tab active" data-target="liveAuditPanel">🔍 Live Visualizer</button>
+            <button class="nav-tab" data-target="benchmarkPanel">📊 30-Site Benchmark</button>
+            <button class="nav-tab" data-target="testbedPanel">🧪 Controlled Testbed</button>
+            <button class="nav-tab" data-target="telemetryPanel">🌐 Telemetry Context</button>
+        </nav>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+
+        <!-- TAB 1: LIVE AUDIT & DEPENDENCY GRAPH -->
+        <section id="liveAuditPanel" class="tab-panel active">
+            <!-- Search & Presets -->
+            <div class="audit-search-card">
+                <form id="auditForm" class="search-form">
+                    <input type="text" id="urlInput" class="url-input" placeholder="Enter target URL (e.g. https://india.gov.in)" value="https://aiori.in" required>
+                    <button type="submit" id="auditBtn" class="btn-audit">Audit Now</button>
+                </form>
+                <div class="preset-chips">
+                    <span class="preset-label">Quick Presets:</span>
+                    <button class="chip" data-url="https://aiori.in">aiori.in</button>
+                    <button class="chip" data-url="https://digitalindia.gov.in">digitalindia.gov.in</button>
+                    <button class="chip" data-url="https://india.gov.in">india.gov.in</button>
+                    <button class="chip" data-url="https://google.com">google.com</button>
+                    <button class="chip" data-url="https://github.com">github.com (No AAAA)</button>
+                    <button class="chip" data-url="http://localhost:8888">Controlled Testbed</button>
+                </div>
+                <div id="auditStatus" style="font-size:0.8rem; color:#94a3b8; margin-top:12px;"></div>
+            </div>
+
+            <!-- Scorecards Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-header">Readiness Score</div>
+                    <div id="metricReadiness" class="metric-value color-green">--%</div>
+                    <div class="metric-sub">IPv6 Sub-resource Compliance</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">Total Dependencies</div>
+                    <div id="metricTotal" class="metric-value color-cyan">--</div>
+                    <div class="metric-sub">Runtime Loaded Assets</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">IPv6 Ready</div>
+                    <div id="metricV6Ready" class="metric-value color-green">--</div>
+                    <div class="metric-sub">Passed All 4 Protocol Stages</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">IPv4-Only Culprits</div>
+                    <div id="metricV4Only" class="metric-value color-red">--</div>
+                    <div class="metric-sub">Missing AAAA Record in DNS</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-header">Broken IPv6 Routes</div>
+                    <div id="metricBroken" class="metric-value color-amber">--</div>
+                    <div class="metric-sub">TCP, TLS, or HTTP 5xx Failure</div>
+                </div>
+            </div>
+
+            <!-- Split Workspace: Graph & Diagnostic Drawer -->
+            <div class="audit-workspace">
+                <div class="graph-container">
+                    <div class="panel-header">
+                        <h2 class="panel-title">Interactive Runtime Dependency Graph</h2>
+                        <div class="graph-legend">
+                            <span class="legend-item"><span class="dot dot-cyan"></span> Apex Root</span>
+                            <span class="legend-item"><span class="dot dot-green"></span> IPv6 Ready</span>
+                            <span class="legend-item"><span class="dot dot-red"></span> IPv4 Only</span>
+                            <span class="legend-item"><span class="dot dot-amber"></span> Broken Route</span>
+                        </div>
+                    </div>
+                    <canvas id="dependencyCanvas" class="graph-canvas"></canvas>
+                </div>
+
+                <div class="diagnostic-drawer">
+                    <div id="drawerPlaceholder" class="drawer-placeholder">
+                        👈 Click any node on the dependency graph to inspect its multi-stage protocol diagnostic logs.
+                    </div>
+                    <div id="drawerContent" style="display:none;"></div>
+                </div>
+            </div>
+
+            <!-- Discovered Resources Table -->
+            <div class="table-container">
+                <div class="panel-header">
+                    <h3 class="panel-title">Runtime Sub-Resources Breakdown</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Host Domain</th>
+                            <th>Resource Type</th>
+                            <th>Party</th>
+                            <th>IPv6 Status</th>
+                            <th>Resource URL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resourceTableBody">
+                        <tr><td colspan="5" style="text-align:center; color:#94a3b8;">Loading audit data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 2: 30-SITE NATIONAL BENCHMARK -->
+        <section id="benchmarkPanel" class="tab-panel">
+            <div class="audit-search-card">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">30-Site National IPv6 Readiness Benchmark</h2>
+                        <p style="color:#94a3b8; font-size:0.85rem; margin-top:4px;">
+                            Empirical measurement across Indian public services, retail, media, education, SaaS, and banking infrastructure.
+                        </p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <a href="/api/reports/csv" download class="btn-export">⬇ Download CSV</a>
+                        <a href="/api/reports/json" download class="btn-export">⬇ Download JSON</a>
+                    </div>
+                </div>
+
+                <div class="metrics-grid" style="margin-top:20px; margin-bottom:0;">
+                    <div class="metric-card">
+                        <div class="metric-header">Average Readiness</div>
+                        <div id="benchAvgScore" class="metric-value color-amber">--%</div>
+                        <div class="metric-sub">Across All Sectors</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">Sites Evaluated</div>
+                        <div id="benchTotalSites" class="metric-value color-cyan">30</div>
+                        <div class="metric-sub">Indian Digital Ecosystem</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Website Name</th>
+                            <th>Sector</th>
+                            <th>Apex AAAA</th>
+                            <th>Total Assets</th>
+                            <th>Readiness Score</th>
+                            <th>Blast Radius</th>
+                            <th>IPv4 Dependencies</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="benchmarkTableBody">
+                        <tr><td colspan="8" style="text-align:center; color:#94a3b8;">Loading benchmark data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 3: CONTROLLED TESTBED -->
+        <section id="testbedPanel" class="tab-panel">
+            <div class="audit-search-card">
+                <div class="panel-header">
+                    <div>
+                        <h2 class="panel-title">Controlled Testbed Verification Suite</h2>
+                        <p style="color:#94a3b8; font-size:0.85rem; margin-top:4px;">
+                            Verification of seeded IPv4-only and broken IPv6 assets to mathematically guarantee 100% precision & recall.
+                        </p>
+                    </div>
+                    <div id="testbedStatusBadge" class="badge badge-ready" style="font-size:0.9rem; padding:6px 14px;">
+                        Checking Ground Truth...
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Seeded Asset Path</th>
+                            <th>Description</th>
+                            <th>Ground Truth Class</th>
+                            <th>Detected Status</th>
+                            <th>Isolated Stage</th>
+                            <th>Verification</th>
+                        </tr>
+                    </thead>
+                    <tbody id="testbedTableBody">
+                        <tr><td colspan="6" style="text-align:center; color:#94a3b8;">Loading testbed results...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 4: TELEMETRY CONTEXT -->
+        <section id="telemetryPanel" class="tab-panel">
+            <div class="audit-search-card">
+                <h2 class="panel-title">Measurement Context & Client Telemetry</h2>
+                <p style="color:#94a3b8; font-size:0.85rem; margin-top:4px; margin-bottom:18px;">
+                    Environmental telemetry recorded alongside each diagnostic probe as mandated by PS-027.
+                </p>
+                <div id="telemetryBox">Loading telemetry...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

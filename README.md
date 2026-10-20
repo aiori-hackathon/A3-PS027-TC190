@@ -81,8 +81,52 @@ An apex domain resolving to an `AAAA` record does not make a website truly IPv6-
 
 ---
 
+---
+
+## ⚡ Quickstart & Running the Prototype (Level 2 Demo)
+
+### 1. Prerequisites & Setup
+```bash
+# Clone the repository
+git clone https://github.com/aiori-hackathon/A3-PS027-TC190.git
+cd A3-PS027-TC190
+
+# Create virtual environment & install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+```
+
+### 2. Launch the Unified System
+```bash
+python run.py
+```
+This will start:
+* **Auditor Web Visualizer & Dashboard**: `http://localhost:8000`
+* **Controlled Ground-Truth Testbed**: `http://localhost:8888`
+* **OpenAPI Documentation / Swagger**: `http://localhost:8000/docs`
+
+### 3. Run Automated Tests
+```bash
+pytest tests/ -v
+```
+Validates the 4-stage protocol engine (DNS, TCP, TLS, HTTP) and asserts **100% precision and recall** on the controlled testbed.
+
+---
+
+## 🧑‍🏫 Mentor Demonstration & Deliverables
+
+* **Pseudocode & Demonstration Snippet**: [`docs/pseudocode_snippet.md`](./docs/pseudocode_snippet.md)
+* **Controlled Ground-Truth Report**: [`reports/controlled_site_report.json`](./reports/controlled_site_report.json)
+* **National Benchmark Dataset**:
+  * Tabular CSV: [`reports/results_30_sites.csv`](./reports/results_30_sites.csv)
+  * Full JSON Data: [`reports/results_30_sites.json`](./reports/results_30_sites.json)
+
+---
+
 ## 👥 Team Information
 
 * **Team Code**: `A3-PS027-TC190`
 * **Hackathon Edition**: AIORI 3.0 (October 2026)
-* **Mentor Collaboration**: Private repository shared with `@aiori-hackathon`
+* **Mentor Collaboration**: Repository hosted on `@aiori-hackathon`

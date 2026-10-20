@@ -1,0 +1,3 @@
+id,name,url,sector,apex_domain,apex_has_aaaa,apex_ipv6_ready,total_resources,unique_domains,ipv6_ready_count,ipv4_only_count,broken_ipv6_count,readiness_score_percent,blast_radius_percent,dns_failures,tcp_failures,tls_failures,http_failures,total_audit_time_ms
+gov_1,National Portal of India,https://india.gov.in,Government & Public Services,india.gov.in,False,False,2,2,1,1,0,50.0,50.0,1,0,0,0,6143.73
+gov_2,Digital India,https://digitalindia.gov.in,Government & Public Services,digitalindia.gov.in,False,False,459,25,105,354,0,22.88,64.42,354,0,0,0,23404.95
