@@ -59,9 +59,12 @@ async def perform_audit(req: AuditRequest):
         "sector": "Live Analysis"
     }
     try:
-        report = benchmark_runner.audit_site(target_spec)
+        import asyncio
+        report = await asyncio.to_thread(benchmark_runner.audit_site, target_spec)
         return JSONResponse(content=report)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Audit execution error: {str(e)}")
 
 @app.get("/api/benchmark")

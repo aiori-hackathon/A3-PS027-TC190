@@ -103,13 +103,17 @@ class BenchmarkRunner:
                 "criticality_weight": weight
             })
 
-        # Calculate Readiness & Blast Radius Scores
+        # Calculate Readiness & Blast Radius Scores (following Webres6 Methodology)
+        apex_is_ready = apex_audit.get("is_ipv6_ready", False)
         if total_resources > 0:
-            readiness_score = round((ipv6_ready_resources / total_resources) * 100, 2)
-            blast_radius_score = round((failed_weight / total_weight) * 100, 2) if total_weight > 0 else 0.0
+            subresource_score = round((ipv6_ready_resources / total_resources) * 100, 2)
+            # SAP Webres6 principle: If the apex root cannot resolve/connect over IPv6, the entire site is unreachable
+            readiness_score = subresource_score if apex_is_ready else 0.0
+            blast_radius_score = 100.0 if not apex_is_ready else (round((failed_weight / total_weight) * 100, 2) if total_weight > 0 else 0.0)
         else:
-            readiness_score = 100.0 if apex_audit.get("is_ipv6_ready") else 0.0
-            blast_radius_score = 0.0 if apex_audit.get("is_ipv6_ready") else 100.0
+            subresource_score = 100.0 if apex_is_ready else 0.0
+            readiness_score = 100.0 if apex_is_ready else 0.0
+            blast_radius_score = 0.0 if apex_is_ready else 100.0
 
         total_site_time_ms = round((time.perf_counter() - t_site_start) * 1000, 2)
 
@@ -122,7 +126,7 @@ class BenchmarkRunner:
             "page_title": crawl_data.get("page_title"),
             "apex_audit": {
                 "has_aaaa": apex_audit.get("stages", {}).get("dns", {}).get("has_aaaa", False),
-                "is_ipv6_ready": apex_audit.get("is_ipv6_ready", False),
+                "is_ipv6_ready": apex_is_ready,
                 "status": apex_audit.get("overall_status"),
                 "failed_stage": apex_audit.get("failed_at_stage")
             },
@@ -135,8 +139,10 @@ class BenchmarkRunner:
                 "ipv4_only_count": ipv4_only_resources,
                 "broken_ipv6_count": broken_ipv6_resources,
                 "readiness_score_percent": readiness_score,
+                "subresource_readiness_percent": subresource_score,
                 "blast_radius_percent": blast_radius_score,
-                "stage_failures": stage_failures
+                "stage_failures": stage_failures,
+                "methodology_reference": "SAP Webres6 (Extended with DAG & 4-Stage OSI Isolation)"
             },
             "total_audit_time_ms": total_site_time_ms,
             "graph": graph_data["graph"],
