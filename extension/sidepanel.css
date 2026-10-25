@@ -1,0 +1,1202 @@
+/**
+ * AIORI PS-027 IPv6 Readiness Auditor - Native Extension Side Panel
+ * Clean Minimalist Engineering Theme (GitHub Dark / Primer / Awwwards Standard)
+ * STRICT RULES: Zero gradients, zero liquid glass / backdrop filters, zero emojis.
+ */
+
+/* ==========================================================================
+   1. CSS RESET & VARIABLES
+   ========================================================================== */
+:root {
+    --bg-page: #0d1117;
+    --bg-card: #161b22;
+    --bg-subtle: #0e1319;
+    --bg-input: #0d1117;
+    --bg-hover: #21262d;
+    --bg-active: #30363d;
+
+    --border-color: #30363d;
+    --border-muted: #21262d;
+    --border-focus: #58a6ff;
+
+    --text-primary: #c9d1d9;
+    --text-heading: #f0f6fc;
+    --text-muted: #8b949e;
+    --text-dim: #6e7681;
+
+    --accent-blue: #58a6ff;
+    --accent-green: #2ea043;
+    --accent-red: #f85149;
+    --accent-amber: #d29922;
+    --accent-purple: #a371f7;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    overflow-y: overlay;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-page);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-dim);
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+}
+
+/* Color utility classes */
+.text-green { color: var(--accent-green) !important; }
+.text-red { color: var(--accent-red) !important; }
+.text-amber { color: var(--accent-amber) !important; }
+.text-blue { color: var(--accent-blue) !important; }
+.text-purple { color: var(--accent-purple) !important; }
+
+/* ==========================================================================
+   2. HEADER & NAVIGATION TABS
+   ========================================================================== */
+.app-header {
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 6px;
+}
+
+.brand-badge {
+    background-color: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    color: var(--text-heading);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+
+.brand-title-wrap {
+    flex: 1;
+    min-width: 0;
+}
+
+.brand-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-heading);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.brand-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    line-height: 1.2;
+}
+
+.daemon-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent-green);
+    display: inline-block;
+}
+
+.daemon-connecting .pulse-dot {
+    background-color: var(--accent-amber);
+}
+
+.daemon-offline .pulse-dot {
+    background-color: var(--accent-red);
+}
+
+/* Tabs list */
+.app-tabs {
+    display: flex;
+    overflow-x: auto;
+    border-top: 1px solid var(--border-muted);
+    background-color: var(--bg-card);
+    scrollbar-width: none;
+}
+.app-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    color: var(--text-heading);
+    border-bottom-color: #f78166;
+    font-weight: 600;
+}
+
+.tab-svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   3. MAIN APPLICATION CONTAINER & CARDS
+   ========================================================================== */
+.app-main {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tab-content {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.tab-content.active {
+    display: flex;
+}
+
+.panel-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px;
+}
+
+.panel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-heading);
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-heading);
+}
+
+.section-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.sub-heading {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* ==========================================================================
+   4. TAB 1: HERO ACTION & CONTROLS
+   ========================================================================== */
+.hero-action-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tab-quick-detect {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+}
+
+.tab-detect-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.meta-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.meta-domain {
+    font-size: 11px;
+    color: var(--accent-blue);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.target-input-row {
+    display: flex;
+    gap: 6px;
+}
+
+.input-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 9px;
+    width: 13px;
+    height: 13px;
+    color: var(--text-dim);
+    pointer-events: none;
+}
+
+.target-input {
+    width: 100%;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-heading);
+    font-size: 12px;
+    padding: 6px 8px 6px 28px;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.target-input:focus {
+    border-color: var(--border-focus);
+}
+
+.preset-chips-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.preset-tag {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.chip {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.chip:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+    border-color: var(--text-dim);
+}
+
+.status-pill {
+    margin-left: auto;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.status-ready {
+    background-color: var(--bg-hover);
+    color: var(--text-muted);
+    border-color: var(--border-color);
+}
+
+.status-running {
+    background-color: #1f2a1f;
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+}
+
+.status-error {
+    background-color: #2b1717;
+    color: var(--accent-red);
+    border-color: var(--accent-red);
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background-color: #21262d;
+    border-color: var(--border-color);
+    color: var(--text-heading);
+}
+.btn-primary:hover {
+    background-color: #30363d;
+    border-color: var(--text-dim);
+}
+
+.btn-emerald {
+    background-color: #238636;
+    border-color: #2ea043;
+    color: #ffffff;
+}
+.btn-emerald:hover {
+    background-color: #2ea043;
+}
+
+.btn-secondary {
+    background-color: var(--bg-subtle);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+.btn-secondary:hover {
+    background-color: var(--bg-hover);
+}
+
+.btn-sm {
+    font-size: 11px;
+    padding: 3px 8px;
+}
+
+.btn-xs {
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+.btn-subtle {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.btn-subtle:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-hover);
+}
+
+/* ==========================================================================
+   5. BENTO SCORECARD GRID
+   ========================================================================== */
+.bento-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.bento-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.bento-hero {
+    grid-column: span 2;
+}
+
+.bento-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.bento-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.bento-metric-val {
+    margin: 4px 0;
+}
+
+.score-large {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-heading);
+    letter-spacing: -0.5px;
+}
+
+.bento-number {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-heading);
+    margin: 4px 0 2px;
+}
+
+.bento-caption {
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.3;
+}
+
+.progress-bar-track {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    height: 5px;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 4px 0 6px;
+}
+
+.progress-bar-fill {
+    background-color: var(--accent-green);
+    height: 100%;
+    width: 0%;
+    transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.badge-tag {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-subtle);
+    color: var(--text-muted);
+}
+
+.badge-v6 {
+    background-color: #122818;
+    border-color: #2ea043;
+    color: var(--accent-green);
+}
+
+.badge-v4 {
+    background-color: #2b1717;
+    border-color: #f85149;
+    color: var(--accent-red);
+}
+
+.badge-broken {
+    background-color: #2e2213;
+    border-color: #d29922;
+    color: var(--accent-amber);
+}
+
+/* ==========================================================================
+   6. INTERACTIVE CANVAS 2D TOPOLOGY GRAPH
+   ========================================================================== */
+.graph-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.node-count-badge {
+    font-size: 10px;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+}
+
+.canvas-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-pills {
+    display: flex;
+    gap: 2px;
+}
+
+.filter-pill {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.filter-pill:hover {
+    color: var(--text-primary);
+}
+
+.filter-pill.active {
+    background-color: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-heading);
+}
+
+.zoom-actions {
+    display: flex;
+    gap: 2px;
+}
+
+.btn-icon {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.btn-icon:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-icon.active {
+    background-color: #1a2733;
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+
+.canvas-wrapper {
+    position: relative;
+    background-color: #090d12;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    width: 100%;
+    height: 250px;
+    overflow: hidden;
+}
+
+#sidepanelCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#sidepanelCanvas:active {
+    cursor: grabbing;
+}
+
+.graph-tooltip {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    background-color: #161b22;
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 10px;
+    color: var(--text-heading);
+    z-index: 10;
+    white-space: nowrap;
+}
+
+.graph-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.dot-blue { background-color: var(--accent-blue); }
+.dot-green { background-color: var(--accent-green); }
+.dot-red { background-color: var(--accent-red); }
+.dot-amber { background-color: var(--accent-amber); }
+
+/* ==========================================================================
+   7. 4-STAGE OSI DIAGNOSTICS DRAWER
+   ========================================================================== */
+.drawer-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.drawer-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 16px 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.empty-icon {
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+.drawer-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stage-accordion {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    cursor: pointer;
+    background-color: var(--bg-card);
+    border-bottom: 1px solid var(--border-muted);
+}
+
+.stage-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.stage-pill {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--accent-blue);
+    background-color: #162638;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+.stage-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-heading);
+}
+
+.stage-details {
+    padding: 8px;
+}
+
+.diag-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 8px;
+}
+
+.diag-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.diag-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.diag-val {
+    font-size: 10px;
+    color: var(--text-heading);
+    word-break: break-all;
+}
+
+.remediation-box {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    margin-top: 4px;
+}
+
+.remediation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.remediation-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.remediation-body {
+    font-size: 10px;
+    color: var(--text-primary);
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+/* ==========================================================================
+   8. LIVE WIRE-LEVEL TERMINAL HUD
+   ========================================================================== */
+.terminal-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-ctrls {
+    display: flex;
+    gap: 4px;
+}
+
+.terminal-view {
+    background-color: #06090e;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    height: 120px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.term-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.term-dim { color: var(--text-dim); }
+.term-info { color: var(--accent-blue); }
+.term-pass { color: var(--accent-green); }
+.term-fail { color: var(--accent-red); }
+.term-warn { color: var(--accent-amber); }
+
+/* ==========================================================================
+   9. TABLES (DEPENDENCIES & BENCHMARK)
+   ========================================================================== */
+.table-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.table-search-input {
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-heading);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    outline: none;
+    width: 140px;
+}
+
+.table-search-input:focus {
+    border-color: var(--border-focus);
+}
+
+.table-scroll {
+    overflow-x: auto;
+    max-height: 220px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.clean-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    text-align: left;
+}
+
+.clean-table th {
+    background-color: var(--bg-subtle);
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.clean-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border-muted);
+    color: var(--text-primary);
+}
+
+.clean-table tr:hover td {
+    background-color: var(--bg-hover);
+}
+
+.empty-cell {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 16px 8px !important;
+}
+
+/* ==========================================================================
+   10. TAB 2: 30-SITE BENCHMARK STYLES
+   ========================================================================== */
+.export-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.benchmark-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.summary-box {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.summary-val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-heading);
+    margin: 2px 0;
+}
+
+.summary-sub {
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+.sector-bars-card,
+.failure-taxonomy-card,
+.benchmark-table-box {
+    margin-top: 12px;
+}
+
+.sector-row {
+    margin-bottom: 6px;
+}
+
+.sector-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.bar-track {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+}
+.fill-green { background-color: var(--accent-green); }
+.fill-blue { background-color: var(--accent-blue); }
+.fill-amber { background-color: var(--accent-amber); }
+.fill-red { background-color: var(--accent-red); }
+
+.taxonomy-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.tax-item {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+}
+
+.tax-pct {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.tax-name {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   11. TAB 3: CONTROLLED TESTBED STYLES
+   ========================================================================== */
+.metrics-row-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.metric-card {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.metric-val {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 2px 0;
+}
+
+.metric-sub {
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+.testbed-scenarios-box {
+    margin-top: 8px;
+}
+
+.testbed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.testbed-item {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-muted);
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+}
+
+.testbed-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.testbed-path {
+    font-weight: 600;
+    color: var(--text-heading);
+}
+
+.testbed-desc {
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+/* ==========================================================================
+   12. TAB 4: CLIENT TELEMETRY STYLES
+   ========================================================================== */
+.telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.telemetry-item {
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.telemetry-label {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.telemetry-val {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-heading);
+    word-break: break-all;
+}
+
+.telemetry-sub {
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+.resolver-bench-card {
+    margin-top: 8px;
+}
+
+.resolver-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   13. FOOTER
+   ========================================================================== */
+.app-footer {
+    background-color: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: auto;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.footer-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--accent-blue);
+}

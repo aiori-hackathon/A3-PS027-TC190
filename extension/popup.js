@@ -37,19 +37,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupEvents(tab) {
-    // Deep Audit Button
-    document.getElementById('btnDeepAudit')?.addEventListener('click', async () => {
-        const targetUrl = tab.url;
-        // Open web dashboard with target pre-filled
-        const auditorPage = `${LOCAL_AUDITOR_URL}/`;
-        await chrome.tabs.create({ url: auditorPage });
-    });
+    // Open Side Panel directly in the same window (NO new browser tabs!)
+    const openSidePanelApp = async (e) => {
+        if (e) e.preventDefault();
+        if (chrome.sidePanel && chrome.sidePanel.open) {
+            try {
+                await chrome.sidePanel.open({ windowId: tab.windowId });
+                window.close();
+            } catch (err) {
+                console.warn('Could not open side panel:', err);
+            }
+        }
+    };
 
-    // Dashboard link
-    document.getElementById('btnOpenDashboard')?.addEventListener('click', async (e) => {
-        e.preventDefault();
-        await chrome.tabs.create({ url: LOCAL_AUDITOR_URL });
-    });
+    // Deep Audit Button triggers side panel application
+    document.getElementById('btnDeepAudit')?.addEventListener('click', openSidePanelApp);
+
+    // Side panel header button
+    document.getElementById('btnOpenSidePanel')?.addEventListener('click', openSidePanelApp);
 
     // Reload Tab button
     document.getElementById('btnReloadTab')?.addEventListener('click', async () => {

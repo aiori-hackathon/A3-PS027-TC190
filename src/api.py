@@ -19,10 +19,20 @@ from .testbed.verifier import TestbedVerifier
 from .telemetry.context import TelemetryCollector
 from .benchmark.runner import BenchmarkRunner
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="AIORI PS-027 IPv6 Auditor",
     description="Browser-based IPv6 Website and Dependency Readiness Auditor",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount static assets

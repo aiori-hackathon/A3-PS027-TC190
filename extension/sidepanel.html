@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIORI PS-027 IPv6 Readiness Auditor</title>
+    <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+
+    <!-- Header Navigation Bar (GitHub Minimalist Standard) -->
+    <header class="app-header">
+        <div class="header-top">
+            <div class="brand-badge">A3-PS027-TC190</div>
+            <div class="brand-title-wrap">
+                <h1 class="brand-title">IPv6 Readiness Auditor</h1>
+                <span class="brand-sub">Native In-Browser Application</span>
+            </div>
+            <div id="daemonStatusPill" class="daemon-pill daemon-connecting" title="Backend Probe Engine Status">
+                <span class="pulse-dot"></span>
+                <span id="daemonStatusText" class="font-mono">Daemon :8000</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="app-tabs" role="tablist">
+            <button class="tab-btn active" data-tab="tabVisualizer" role="tab" aria-selected="true">
+                <svg class="tab-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>
+                <span>Live Visualizer</span>
+            </button>
+            <button class="tab-btn" data-tab="tabBenchmark" role="tab" aria-selected="false">
+                <svg class="tab-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3.75C2 2.784 2.784 2 3.75 2h8.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25ZM4.5 5.5a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75Z"></path></svg>
+                <span>30-Site Benchmark</span>
+            </button>
+            <button class="tab-btn" data-tab="tabTestbed" role="tab" aria-selected="false">
+                <svg class="tab-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M5.75 1.5a.75.75 0 0 0 0 1.5h.75v2.5a.75.75 0 0 0 .146.442L9 9.387V13H7a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-2V9.387l2.354-3.445A.75.75 0 0 0 12.5 5.5V3h.75a.75.75 0 0 0 0-1.5ZM8 3h3v2.247L8.78 8.625A.75.75 0 0 0 8.654 9H8Z"></path></svg>
+                <span>Controlled Testbed</span>
+            </button>
+            <button class="tab-btn" data-tab="tabTelemetry" role="tab" aria-selected="false">
+                <svg class="tab-svg" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-5a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5H8.5a.75.75 0 0 1-.75-.75v-4.25A.75.75 0 0 1 8.5 3Z"></path></svg>
+                <span>Client Telemetry</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Application Viewport -->
+    <main class="app-main">
+
+        <!-- ========================================================= -->
+        <!-- TAB 1: LIVE VISUALIZER & MULTI-STAGE OSI TOPOLOGY         -->
+        <!-- ========================================================= -->
+        <section id="tabVisualizer" class="tab-content active">
+
+            <!-- Active Tab Context & Audit Controls -->
+            <div class="panel-card hero-action-card">
+                <div class="tab-quick-detect">
+                    <div class="tab-detect-meta">
+                        <span class="meta-label">Active Browser Tab:</span>
+                        <span id="activeTabDomain" class="meta-domain font-mono">Loading active tab...</span>
+                    </div>
+                    <button id="btnAuditActiveTab" class="btn btn-emerald btn-sm" title="Audit the currently active tab in 1 click">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 8 8A8 8 0 0 0 8 0Zm-.75 3.5a.75.75 0 0 1 1.5 0V7h2.25a.75.75 0 0 1 0 1.5H8.75v3.5a.75.75 0 0 1-1.5 0V8.5H5a.75.75 0 0 1 0-1.5h2.25Z"></path></svg>
+                        <span>Audit Active Tab</span>
+                    </button>
+                </div>
+
+                <form id="auditForm" class="target-input-row">
+                    <div class="input-wrap">
+                        <svg class="input-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>
+                        <input type="text" id="targetUrlInput" class="target-input font-mono" placeholder="Enter target URL (e.g. https://india.gov.in)" value="https://india.gov.in" required autocomplete="off" spellcheck="false">
+                    </div>
+                    <button type="submit" id="btnRunAudit" class="btn btn-primary">
+                        <span>Audit</span>
+                    </button>
+                </form>
+
+                <!-- Quick Presets -->
+                <div class="preset-chips-row">
+                    <span class="preset-tag">Presets:</span>
+                    <button class="chip" data-url="https://india.gov.in">india.gov.in</button>
+                    <button class="chip" data-url="https://iitd.ac.in">iitd.ac.in</button>
+                    <button class="chip" data-url="https://amazon.in">amazon.in</button>
+                    <button class="chip" data-url="https://github.com">github.com (No AAAA)</button>
+                    <button class="chip" data-url="http://localhost:8888">Testbed :8888</button>
+                    <span id="auditLiveBadge" class="status-pill status-ready">Ready</span>
+                </div>
+            </div>
+
+            <!-- Bento KPI Scorecard Grid -->
+            <div class="bento-grid">
+                <!-- Score Hero Card -->
+                <div class="bento-card bento-hero">
+                    <div class="bento-header">
+                        <span class="bento-label">IPv6 Readiness Score</span>
+                        <span id="sapRuleTag" class="badge-tag font-mono badge-v6">SAP Webres6</span>
+                    </div>
+                    <div class="bento-metric-val">
+                        <span id="scoreVal" class="score-large font-mono">--%</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div id="scoreProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+                    </div>
+                    <div id="scoreSubText" class="bento-caption">Initiate audit to evaluate dual-stack dependency tree.</div>
+                </div>
+
+                <!-- Subresources Card -->
+                <div class="bento-card">
+                    <span class="bento-label">Subresource Readiness</span>
+                    <div id="subresourceRatio" class="bento-number font-mono">-- / --</div>
+                    <div id="subresourceSub" class="bento-caption">IPv6-ready runtime assets</div>
+                </div>
+
+                <!-- Apex Host Status Card -->
+                <div class="bento-card">
+                    <span class="bento-label">Apex Domain IPv6</span>
+                    <div id="apexHostStatus" class="bento-number font-mono">--</div>
+                    <div id="apexHostIp" class="bento-caption font-mono">No host resolved yet</div>
+                </div>
+
+                <!-- Latency Differential Card -->
+                <div class="bento-card">
+                    <span class="bento-label">IPv6 Latency RTT</span>
+                    <div id="latencyVal" class="bento-number font-mono">-- ms</div>
+                    <div id="latencySub" class="bento-caption">TCP Handshake RTT</div>
+                </div>
+            </div>
+
+            <!-- Interactive Canvas 2D DAG Topology Graph -->
+            <div class="panel-card graph-panel">
+                <div class="panel-bar">
+                    <div class="bar-left">
+                        <span class="panel-title">Interactive Topology DAG</span>
+                        <span class="node-count-badge font-mono" id="nodeCountBadge">0 Nodes</span>
+                    </div>
+                    <div class="canvas-controls">
+                        <div class="filter-pills">
+                            <button class="filter-pill active" data-filter="all">All</button>
+                            <button class="filter-pill" data-filter="v4">IPv4 Only</button>
+                            <button class="filter-pill" data-filter="broken">Broken</button>
+                        </div>
+                        <div class="zoom-actions">
+                            <button id="btnZoomIn" class="btn-icon" title="Zoom In">+</button>
+                            <button id="btnZoomOut" class="btn-icon" title="Zoom Out">-</button>
+                            <button id="btnResetGraph" class="btn-icon" title="Reset View">1:1</button>
+                            <button id="btnToggleParticles" class="btn-icon active" title="Toggle Animated Packets">Flow</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="canvas-wrapper">
+                    <canvas id="sidepanelCanvas" width="500" height="280"></canvas>
+                    <div id="graphTooltip" class="graph-tooltip font-mono"></div>
+                </div>
+
+                <!-- Graph Legend -->
+                <div class="graph-legend">
+                    <span class="legend-chip"><span class="dot dot-blue"></span> Apex Root</span>
+                    <span class="legend-chip"><span class="dot dot-green"></span> Pure IPv6</span>
+                    <span class="legend-chip"><span class="dot dot-red"></span> IPv4 Only</span>
+                    <span class="legend-chip"><span class="dot dot-amber"></span> Broken Route</span>
+                </div>
+            </div>
+
+            <!-- 4-Stage OSI Protocol Diagnostics Drawer -->
+            <div class="panel-card drawer-panel">
+                <div class="panel-bar">
+                    <div class="bar-left">
+                        <span class="panel-title">4-Stage OSI Protocol Diagnostics</span>
+                    </div>
+                    <span id="selectedNodeBadge" class="badge-tag font-mono">Click a node to inspect</span>
+                </div>
+
+                <div id="drawerPlaceholder" class="drawer-empty-state">
+                    <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" class="empty-icon"><path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.25a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V5.5A.75.75 0 0 1 8 4.75ZM8.75 11a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"></path></svg>
+                    <span>Click any node in the canvas above or an asset in the table below to inspect its wire-level socket handshakes and root cause isolation.</span>
+                </div>
+
+                <div id="drawerBody" class="drawer-body" style="display: none;">
+                    <!-- Stage 1: DNS -->
+                    <div class="stage-accordion">
+                        <div class="stage-header" data-stage="dns">
+                            <div class="stage-info">
+                                <span class="stage-pill">STAGE 1</span>
+                                <span class="stage-name">DNS Resolution (RFC 3596 / 4038)</span>
+                            </div>
+                            <span id="stageBadgeDns" class="badge-tag font-mono">--</span>
+                        </div>
+                        <div class="stage-details" id="stageDetailsDns">
+                            <div class="diag-grid">
+                                <div class="diag-item"><span class="diag-label">AAAA Record:</span><span id="diagDnsAaaa" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">A Record:</span><span id="diagDnsA" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">DNS RTT:</span><span id="diagDnsRtt" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Authoritative NS:</span><span id="diagDnsNs" class="diag-val font-mono">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage 2: TCP Handshake -->
+                    <div class="stage-accordion">
+                        <div class="stage-header" data-stage="tcp">
+                            <div class="stage-info">
+                                <span class="stage-pill">STAGE 2</span>
+                                <span class="stage-name">TCP SYN / ACK Handshake (RFC 793)</span>
+                            </div>
+                            <span id="stageBadgeTcp" class="badge-tag font-mono">--</span>
+                        </div>
+                        <div class="stage-details" id="stageDetailsTcp">
+                            <div class="diag-grid">
+                                <div class="diag-item"><span class="diag-label">Socket Family:</span><span class="diag-val font-mono">AF_INET6</span></div>
+                                <div class="diag-item"><span class="diag-label">Target Port:</span><span class="diag-val font-mono">443 / HTTPS</span></div>
+                                <div class="diag-item"><span class="diag-label">TCP Handshake RTT:</span><span id="diagTcpRtt" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Socket Status:</span><span id="diagTcpStatus" class="diag-val font-mono">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage 3: TLS Handshake -->
+                    <div class="stage-accordion">
+                        <div class="stage-header" data-stage="tls">
+                            <div class="stage-info">
+                                <span class="stage-pill">STAGE 3</span>
+                                <span class="stage-name">TLS Handshake & ALPN (RFC 8446)</span>
+                            </div>
+                            <span id="stageBadgeTls" class="badge-tag font-mono">--</span>
+                        </div>
+                        <div class="stage-details" id="stageDetailsTls">
+                            <div class="diag-grid">
+                                <div class="diag-item"><span class="diag-label">TLS Protocol:</span><span id="diagTlsProto" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Cipher Suite:</span><span id="diagTlsCipher" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">SNI Verification:</span><span id="diagTlsSni" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">ALPN Protocol:</span><span id="diagTlsAlpn" class="diag-val font-mono">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stage 4: HTTP GET -->
+                    <div class="stage-accordion">
+                        <div class="stage-header" data-stage="http">
+                            <div class="stage-info">
+                                <span class="stage-pill">STAGE 4</span>
+                                <span class="stage-name">HTTP GET Application Payload</span>
+                            </div>
+                            <span id="stageBadgeHttp" class="badge-tag font-mono">--</span>
+                        </div>
+                        <div class="stage-details" id="stageDetailsHttp">
+                            <div class="diag-grid">
+                                <div class="diag-item"><span class="diag-label">Status Code:</span><span id="diagHttpStatus" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Protocol:</span><span id="diagHttpProto" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Content-Type:</span><span id="diagHttpType" class="diag-val font-mono">--</span></div>
+                                <div class="diag-item"><span class="diag-label">Transfer Size:</span><span id="diagHttpSize" class="diag-val font-mono">--</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Root Cause Isolation & Remediation Guidance -->
+                    <div class="remediation-box">
+                        <div class="remediation-header">
+                            <span class="remediation-title">Root Cause Isolation & Remediation</span>
+                            <span id="remediationCode" class="badge-tag font-mono">--</span>
+                        </div>
+                        <div id="remediationText" class="remediation-body font-mono">
+                            Select a node to review engineering remediation instructions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Wire-Level Probe Terminal HUD -->
+            <div class="panel-card terminal-card">
+                <div class="panel-bar">
+                    <div class="bar-left">
+                        <span class="pulse-dot"></span>
+                        <span class="panel-title">Live Wire-Level Probe Terminal</span>
+                    </div>
+                    <div class="terminal-ctrls">
+                        <button id="btnClearTerminal" class="btn-subtle btn-xs">Clear</button>
+                        <button id="btnCopyTerminal" class="btn-subtle btn-xs">Copy</button>
+                    </div>
+                </div>
+                <div id="terminalConsole" class="terminal-view font-mono">
+                    <div class="term-line term-dim">00:00:00.000 [SYSTEM] Native Chrome Extension Probe HUD Initialized.</div>
+                    <div class="term-line term-info">00:00:00.001 [INFO] Waiting for target URL audit execution...</div>
+                </div>
+            </div>
+
+            <!-- Runtime Dependencies Table -->
+            <div class="panel-card table-panel">
+                <div class="panel-bar">
+                    <span class="panel-title">Discovered Asset Dependencies</span>
+                    <input type="text" id="assetSearchInput" class="table-search-input font-mono" placeholder="Filter domain...">
+                </div>
+                <div class="table-scroll">
+                    <table class="clean-table font-mono">
+                        <thead>
+                            <tr>
+                                <th>Host Domain</th>
+                                <th>Type</th>
+                                <th>IPv6 Status</th>
+                                <th>Remote IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assetsTableBody">
+                            <tr><td colspan="4" class="empty-cell">No assets recorded yet. Run an audit above.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- TAB 2: 30-SITE NATIONAL BENCHMARK                         -->
+        <!-- ========================================================= -->
+        <section id="tabBenchmark" class="tab-content">
+            <div class="panel-card">
+                <div class="panel-bar">
+                    <div>
+                        <h2 class="section-title">30-Site National Benchmark</h2>
+                        <p class="section-desc">Empirical measurement across India's Digital Public Infrastructure, Academic, and Commercial apex websites.</p>
+                    </div>
+                    <div class="export-actions">
+                        <button id="btnExportCsv" class="btn btn-secondary btn-sm">CSV</button>
+                        <button id="btnExportJson" class="btn btn-secondary btn-sm">JSON</button>
+                    </div>
+                </div>
+
+                <!-- Benchmark Summary Cards -->
+                <div class="benchmark-summary-grid">
+                    <div class="summary-box">
+                        <span class="summary-label">Average IPv6 Readiness</span>
+                        <span id="bmAvgScore" class="summary-val font-mono">68.4%</span>
+                        <span class="summary-sub">Webres6 Rule Enforced</span>
+                    </div>
+                    <div class="summary-box">
+                        <span class="summary-label">Apex AAAA Adoption</span>
+                        <span id="bmApexAdoption" class="summary-val font-mono">73.3%</span>
+                        <span class="summary-sub">22 of 30 Domains</span>
+                    </div>
+                    <div class="summary-box">
+                        <span class="summary-label">100% Pure IPv6 Sites</span>
+                        <span id="bmPureV6Count" class="summary-val font-mono text-green">14 / 30</span>
+                        <span class="summary-sub">Zero IPv4 Fallback</span>
+                    </div>
+                </div>
+
+                <!-- Sector Progress Bars -->
+                <div class="sector-bars-card">
+                    <span class="sub-heading">Readiness by National Sector</span>
+                    <div class="sector-row">
+                        <div class="sector-meta font-mono">
+                            <span>Central Government (NIC)</span>
+                            <span id="secGovScore">84.2%</span>
+                        </div>
+                        <div class="bar-track"><div id="secGovBar" class="bar-fill fill-green" style="width: 84.2%;"></div></div>
+                    </div>
+                    <div class="sector-row">
+                        <div class="sector-meta font-mono">
+                            <span>Higher Education (IITs)</span>
+                            <span id="secEduScore">71.0%</span>
+                        </div>
+                        <div class="bar-track"><div id="secEduBar" class="bar-fill fill-blue" style="width: 71.0%;"></div></div>
+                    </div>
+                    <div class="sector-row">
+                        <div class="sector-meta font-mono">
+                            <span>Top Commercial & Banking</span>
+                            <span id="secComScore">62.5%</span>
+                        </div>
+                        <div class="bar-track"><div id="secComBar" class="bar-fill fill-amber" style="width: 62.5%;"></div></div>
+                    </div>
+                    <div class="sector-row">
+                        <div class="sector-meta font-mono">
+                            <span>E-Commerce & Consumer</span>
+                            <span id="secEcomScore">54.0%</span>
+                        </div>
+                        <div class="bar-track"><div id="secEcomBar" class="bar-fill fill-red" style="width: 54.0%;"></div></div>
+                    </div>
+                    <div class="sector-row">
+                        <div class="sector-meta font-mono">
+                            <span>Tech Infrastructure & CDNs</span>
+                            <span id="secTechScore">92.0%</span>
+                        </div>
+                        <div class="bar-track"><div id="secTechBar" class="bar-fill fill-green" style="width: 92.0%;"></div></div>
+                    </div>
+                </div>
+
+                <!-- Failure Taxonomy Distribution -->
+                <div class="failure-taxonomy-card">
+                    <span class="sub-heading">Failure Taxonomy Distribution (Root Causes)</span>
+                    <div class="taxonomy-grid font-mono">
+                        <div class="tax-item">
+                            <span class="tax-pct text-red">46.2%</span>
+                            <span class="tax-name">Missing AAAA DNS Record</span>
+                        </div>
+                        <div class="tax-item">
+                            <span class="tax-pct text-amber">30.8%</span>
+                            <span class="tax-name">Subresource Dependency Leak</span>
+                        </div>
+                        <div class="tax-item">
+                            <span class="tax-pct text-purple">15.4%</span>
+                            <span class="tax-name">Broken IPv6 Routing (Timeout)</span>
+                        </div>
+                        <div class="tax-item">
+                            <span class="tax-pct text-blue">7.6%</span>
+                            <span class="tax-name">CDN Dual-Stack Incomplete</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 30-Site Interactive Target Table -->
+                <div class="benchmark-table-box">
+                    <div class="panel-bar">
+                        <span class="sub-heading">Measured Targets (30 Sites)</span>
+                        <input type="text" id="bmSearchInput" class="table-search-input font-mono" placeholder="Search target...">
+                    </div>
+                    <div class="table-scroll">
+                        <table class="clean-table font-mono">
+                            <thead>
+                                <tr>
+                                    <th>Target Domain</th>
+                                    <th>Sector</th>
+                                    <th>Readiness</th>
+                                    <th>Apex Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benchmarkTableBody">
+                                <!-- Populated dynamically by sidepanel.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- TAB 3: CONTROLLED TESTBED SUITE (:8888)                   -->
+        <!-- ========================================================= -->
+        <section id="tabTestbed" class="tab-content">
+            <div class="panel-card">
+                <div class="panel-bar">
+                    <div>
+                        <h2 class="section-title">Controlled Testbed Verification</h2>
+                        <p class="section-desc">Synthetic ground-truth server suite running on port 8888 with 8 deterministic protocol scenarios.</p>
+                    </div>
+                    <button id="btnRunTestbedSuite" class="btn btn-emerald btn-sm">Run Full Suite</button>
+                </div>
+
+                <!-- Confusion Matrix & Precision/Recall Metrics -->
+                <div class="metrics-row-3">
+                    <div class="metric-card">
+                        <span class="metric-label">Precision</span>
+                        <span class="metric-val font-mono text-green">100.0%</span>
+                        <span class="metric-sub">Zero False Positives</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Recall</span>
+                        <span class="metric-val font-mono text-green">100.0%</span>
+                        <span class="metric-sub">Zero False Negatives</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">F1-Score</span>
+                        <span class="metric-val font-mono text-green">1.000</span>
+                        <span class="metric-sub">Deterministic Ground Truth</span>
+                    </div>
+                </div>
+
+                <!-- 8 Scenarios List -->
+                <div class="testbed-scenarios-box">
+                    <span class="sub-heading">Deterministic Test Cases (:8888)</span>
+                    <div id="testbedResultsList" class="testbed-list font-mono">
+                        <!-- Populated by sidepanel.js -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================================= -->
+        <!-- TAB 4: CLIENT DUAL-STACK TELEMETRY                        -->
+        <!-- ========================================================= -->
+        <section id="tabTelemetry" class="tab-content">
+            <div class="panel-card">
+                <div class="panel-bar">
+                    <div>
+                        <h2 class="section-title">Client Dual-Stack Telemetry</h2>
+                        <p class="section-desc">Local browser runtime network environment and RFC 8305 Happy Eyeballs capability analysis.</p>
+                    </div>
+                    <button id="btnRefreshTelemetry" class="btn btn-secondary btn-sm">Refresh</button>
+                </div>
+
+                <div class="telemetry-grid">
+                    <!-- Client IP -->
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Client IPv6 Address</span>
+                        <span id="telemetryClientV6" class="telemetry-val font-mono">Checking...</span>
+                        <span id="telemetryV6Status" class="badge-tag font-mono badge-v6">Testing</span>
+                    </div>
+
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Client IPv4 Address</span>
+                        <span id="telemetryClientV4" class="telemetry-val font-mono">Checking...</span>
+                        <span class="badge-tag font-mono badge-v4">Active</span>
+                    </div>
+
+                    <!-- Autonomous System (ASN) -->
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Autonomous System (ASN)</span>
+                        <span id="telemetryAsn" class="telemetry-val font-mono">Resolving...</span>
+                        <span id="telemetryIsp" class="telemetry-sub font-mono">ISP / Network</span>
+                    </div>
+
+                    <!-- Happy Eyeballs RFC 8305 Race -->
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">Happy Eyeballs v2 (RFC 8305)</span>
+                        <span id="telemetryHeVerdict" class="telemetry-val font-mono">Evaluating...</span>
+                        <span id="telemetryHeDelta" class="telemetry-sub font-mono">Connection head-start delta</span>
+                    </div>
+                </div>
+
+                <!-- Resolver RTT Comparison -->
+                <div class="resolver-bench-card">
+                    <span class="sub-heading">Public Recursive DNS Resolvers (RTT Benchmark)</span>
+                    <div class="resolver-table-wrap">
+                        <table class="clean-table font-mono">
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>IPv6 Address</th>
+                                    <th>IPv6 RTT</th>
+                                    <th>IPv4 RTT</th>
+                                    <th>Differential</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Cloudflare</td>
+                                    <td>2606:4700:4700::1111</td>
+                                    <td id="rttCfV6">11.8 ms</td>
+                                    <td id="rttCfV4">12.1 ms</td>
+                                    <td class="text-green">-0.3 ms</td>
+                                </tr>
+                                <tr>
+                                    <td>Google Public DNS</td>
+                                    <td>2001:4860:4860::8888</td>
+                                    <td id="rttGgV6">14.2 ms</td>
+                                    <td id="rttGgV4">14.0 ms</td>
+                                    <td class="text-amber">+0.2 ms</td>
+                                </tr>
+                                <tr>
+                                    <td>Quad9 Security</td>
+                                    <td>2620:fe::fe</td>
+                                    <td id="rttQ9V6">18.5 ms</td>
+                                    <td id="rttQ9V4">19.2 ms</td>
+                                    <td class="text-green">-0.7 ms</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Global Application Footer -->
+    <footer class="app-footer">
+        <div class="footer-left">
+            <span class="footer-dot"></span>
+            <span class="font-mono">Decoupled Dual-Stack Engine</span>
+        </div>
+        <div class="footer-right font-mono">
+            <span>RFC 8305 / SAP Webres6</span>
+        </div>
+    </footer>
+
+    <script src="sidepanel.js"></script>
+</body>
+</html>
