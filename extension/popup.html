@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPv6 Readiness Inspector</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="pop-header">
+        <div class="pop-brand">
+            <span class="pop-badge">A3-PS027-TC190</span>
+            <span class="pop-title">IPv6 Inspector</span>
+        </div>
+        <a id="btnOpenDashboard" href="#" class="btn-dash" title="Open Full Web Dashboard">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3.75 2h8.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm0 1.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25ZM4.5 5.5a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Z"></path></svg>
+            <span>Dashboard</span>
+        </a>
+    </header>
+
+    <!-- Main Content -->
+    <main class="pop-body">
+        <!-- Target Domain Strip -->
+        <div class="target-strip">
+            <span class="target-label">Target:</span>
+            <span id="currentDomain" class="target-domain font-mono">Loading...</span>
+        </div>
+
+        <!-- Scorecard Summary -->
+        <div class="score-card">
+            <div class="score-left">
+                <span class="score-caption">IPv6 Readiness</span>
+                <span id="scoreValue" class="score-number font-mono">--%</span>
+                <span id="scoreSub" class="score-sub">Waiting for page assets...</span>
+            </div>
+            <div class="score-stats">
+                <div class="stat-row">
+                    <span class="stat-label">Apex IP:</span>
+                    <span id="apexIpBadge" class="badge-tag font-mono">--</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">IPv6 Assets:</span>
+                    <span id="countV6" class="stat-val font-mono text-green">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">IPv4 Assets:</span>
+                    <span id="countV4" class="stat-val font-mono text-red">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Requests:</span>
+                    <span id="countTotal" class="stat-val font-mono">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Deep Audit CTA Button -->
+        <button id="btnDeepAudit" class="btn-audit">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>
+            <span>Launch 4-Stage OSI Deep Audit</span>
+        </button>
+
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+            <div class="filter-group">
+                <button class="pill active" data-filter="all">All</button>
+                <button class="pill" data-filter="v4">IPv4 Only</button>
+                <button class="pill" data-filter="v6">IPv6</button>
+            </div>
+            <input type="text" id="domainSearch" class="search-box font-mono" placeholder="Filter host...">
+        </div>
+
+        <!-- Domains List -->
+        <div class="list-container">
+            <div id="domainList" class="domain-items">
+                <div class="empty-state">No network requests recorded for this tab yet. Reload the page to inspect.</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="pop-footer">
+        <span class="footer-text font-mono">Decoupled Dual-Stack Probe Engine</span>
+        <button id="btnReloadTab" class="btn-subtle">Reload Tab</button>
+    </footer>
+
+    <script src="popup.js"></script>
+</body>
+</html>
