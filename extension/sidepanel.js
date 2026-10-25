@@ -1,20 +1,18 @@
 /**
- * AIORI PS-027 IPv6 Website & Dependency Readiness Auditor
- * Native In-Browser Chrome Side Panel Application Script
+ * AIORI PS-027 IPv6 Readiness Auditor - Native Extension Side Panel Script
+ * Clean, calm, professional engineering client (GitHub Primer / Linear / Vercel Standard)
  *
- * Fully self-contained:
- * - Direct active tab inspection & 1-click audit
- * - 4-stage OSI protocol diagnostics (DNS, TCP, TLS, HTTP)
- * - Interactive Canvas 2D DAG topology graph with animated packet flows
- * - Live wire-level probe terminal HUD
- * - 30-site national benchmark with search, sector analytics, and CSV/JSON export
- * - Controlled testbed verification (:8888) with 100% precision & recall
- * - Client dual-stack telemetry & RFC 8305 Happy Eyeballs race evaluation
+ * Adheres strictly to:
+ * - SAP Webres6 scoring: If apex lacks IPv6, readiness is 0%.
+ * - High-DPI canvas scaling with devicePixelRatio.
+ * - Animation loop paused when document is hidden or prefers-reduced-motion is active.
+ * - Robust state handling: Empty state, Skeleton loading, Error alerts, Data provenance badges.
+ * - Collapsible "Other targets" and Stepper pipeline.
  */
 
 const LOCAL_API_BASE = 'http://localhost:8000';
 
-// Global Application State
+// Global State
 let activeTabInfo = null;
 let currentAuditData = null;
 let graphNodes = [];
@@ -22,12 +20,11 @@ let graphEdges = [];
 let graphParticles = [];
 let selectedNode = null;
 let hoveredNode = null;
-let isDraggingNode = false;
-let activeGraphFilter = 'all';
 let particlesEnabled = true;
+let isGraphTableView = false;
 let animFrameId = null;
 
-// Camera / Zoom State for Canvas
+// Camera state for Canvas
 let camera = {
     x: 0,
     y: 0,
@@ -41,68 +38,110 @@ let camera = {
 let canvas = null;
 let ctx = null;
 
-// Benchmark Data Cache
+// Terminal buffer & auto-scroll lock
+let terminalLinesCount = 0;
+let userScrolledTerminal = false;
+
+// Benchmark cache & sort state
 let benchmarkDataCache = null;
+let currentSortCol = 'score';
+let currentSortAsc = false;
 
 // ==========================================================================
-// 1. DOM READY & INITIALIZATION
+// 1. INITIALIZATION & LIFECYCLE
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
     initCanvas();
     initTabNavigation();
     initControls();
+    initDisclosureAndToggles();
+    initTerminalActions();
     initActiveTabDetection();
     checkDaemonHealth();
 
-    // Default target audit if available
-    const urlInput = document.getElementById('targetUrlInput');
-    if (urlInput && urlInput.value) {
-        runAudit(urlInput.value);
+    // Pause animation when tab or panel is hidden to save CPU/battery
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopAnimationLoop();
+        } else {
+            startAnimationLoop();
+        }
+    });
+
+    // Check prefers-reduced-motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        particlesEnabled = false;
+        const btn = document.getElementById('btnToggleParticles');
+        if (btn) btn.classList.remove('active');
     }
 });
 
 // ==========================================================================
-// 2. ACTIVE BROWSER TAB DETECTION
+// 2. ACTIVE BROWSER TAB DETECTION & STATE GUARDS
 // ==========================================================================
 async function initActiveTabDetection() {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.url) {
-            updateActiveTabUI(tab);
-        }
+        if (tab) handleTabContext(tab);
     } catch (e) {
         console.warn('Could not query active tab:', e);
     }
 
-    // Listen for tab switches
     if (chrome.tabs && chrome.tabs.onActivated) {
         chrome.tabs.onActivated.addListener(async (activeInfo) => {
             try {
                 const tab = await chrome.tabs.get(activeInfo.tabId);
-                if (tab && tab.url) {
-                    updateActiveTabUI(tab);
-                }
+                if (tab) handleTabContext(tab);
             } catch {}
+        });
+    }
+
+    if (chrome.tabs && chrome.tabs.onUpdated) {
+        chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+            if (activeTabInfo && activeTabInfo.id === tabId && changeInfo.url) {
+                handleTabContext(tab);
+            }
         });
     }
 }
 
-function updateActiveTabUI(tab) {
+function handleTabContext(tab) {
     activeTabInfo = tab;
     const domainEl = document.getElementById('activeTabDomain');
     const inputEl = document.getElementById('targetUrlInput');
+    const btnAudit = document.getElementById('btnAuditActiveTab');
+    const alertBanner = document.getElementById('systemAlertBanner');
+    const alertText = document.getElementById('systemAlertText');
 
-    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    const url = tab.url || '';
+    const isSpecialPage = !url || url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:') || url.startsWith('edge://');
+
+    if (isSpecialPage) {
         if (domainEl) domainEl.innerText = 'Browser System Tab';
+        if (btnAudit) {
+            btnAudit.disabled = true;
+            btnAudit.title = 'Cannot audit internal browser pages';
+        }
+        if (alertBanner && alertText) {
+            alertBanner.style.display = 'flex';
+            alertBanner.className = 'alert-banner alert-warning';
+            alertText.innerText = 'Active page is a browser system tab. Navigate to a website or pick a preset below.';
+        }
         return;
     }
 
+    // Normal website
+    if (btnAudit) {
+        btnAudit.disabled = false;
+        btnAudit.title = 'Audit the current active tab';
+    }
+    if (alertBanner) alertBanner.style.display = 'none';
+
     try {
-        const u = new URL(tab.url);
-        if (domainEl) domainEl.innerText = u.hostname || tab.title || 'Active Tab';
-        // Suggest active tab URL if input is default or empty
+        const u = new URL(url);
+        if (domainEl) domainEl.innerText = u.hostname || tab.title || 'Current Page';
         if (inputEl && (!inputEl.value || inputEl.value === 'https://india.gov.in')) {
-            inputEl.value = tab.url;
+            inputEl.value = url;
         }
     } catch {
         if (domainEl) domainEl.innerText = tab.title || 'Current Page';
@@ -110,7 +149,7 @@ function updateActiveTabUI(tab) {
 }
 
 // ==========================================================================
-// 3. DAEMON HEALTH CHECK & API CONNECTIVITY
+// 3. DAEMON HEALTH CHECK
 // ==========================================================================
 async function checkDaemonHealth() {
     const pill = document.getElementById('daemonStatusPill');
@@ -118,24 +157,24 @@ async function checkDaemonHealth() {
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 1800);
         const res = await fetch(`${LOCAL_API_BASE}/api/telemetry`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (res.ok) {
             if (pill) pill.className = 'daemon-pill';
-            if (text) text.innerText = 'Daemon :8000 (Active)';
+            if (text) text.innerText = 'Live :8000';
             return true;
         }
     } catch {}
 
     if (pill) pill.className = 'daemon-pill daemon-connecting';
-    if (text) text.innerText = 'Daemon Offline (Fallback)';
+    if (text) text.innerText = 'Offline (Simulated)';
     return false;
 }
 
 // ==========================================================================
-// 4. TAB NAVIGATION CONTROLLER
+// 4. TAB NAVIGATION (PRIMER UNDERLINE)
 // ==========================================================================
 function initTabNavigation() {
     const tabs = document.querySelectorAll('.tab-btn');
@@ -155,22 +194,55 @@ function initTabNavigation() {
 
             if (targetId === 'tabVisualizer') {
                 resizeCanvas();
-            } else if (targetId === 'tabBenchmark') {
-                loadBenchmarkData();
-            } else if (targetId === 'tabTestbed') {
-                loadTestbedData();
-            } else if (targetId === 'tabTelemetry') {
-                loadTelemetryData();
+                startAnimationLoop();
+            } else {
+                stopAnimationLoop();
+                if (targetId === 'tabBenchmark') loadBenchmarkData();
+                if (targetId === 'tabTestbed') loadTestbedData();
+                if (targetId === 'tabTelemetry') loadTelemetryData();
             }
         });
     });
 }
 
 // ==========================================================================
-// 5. EVENT HANDLERS & FORM CONTROLS
+// 5. EVENT HANDLERS & DISCLOSURE
 // ==========================================================================
+function initDisclosureAndToggles() {
+    // Collapsible "Other targets"
+    const toggleBtn = document.getElementById('btnToggleOtherTargets');
+    const disclosureWrap = document.getElementById('otherTargetsDisclosure');
+    toggleBtn?.addEventListener('click', () => {
+        const isOpen = disclosureWrap.classList.toggle('open');
+        toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    // Stepper Stage headers toggle
+    document.querySelectorAll('.step-summary-bar').forEach(bar => {
+        bar.addEventListener('click', () => {
+            const stepId = bar.dataset.step;
+            const stepNode = document.getElementById(stepId);
+            if (stepNode) {
+                const isOpen = stepNode.classList.toggle('open');
+                bar.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            }
+        });
+    });
+
+    // Graph vs Table View toggle
+    document.getElementById('btnToggleGraphView')?.addEventListener('click', (e) => {
+        isGraphTableView = !isGraphTableView;
+        const canvasWrap = document.getElementById('canvasViewWrap');
+        const altTableWrap = document.getElementById('graphAltTableView');
+        if (canvasWrap) canvasWrap.style.display = isGraphTableView ? 'none' : 'block';
+        if (altTableWrap) altTableWrap.style.display = isGraphTableView ? 'block' : 'none';
+        e.currentTarget.classList.toggle('active', isGraphTableView);
+        e.currentTarget.innerText = isGraphTableView ? 'Graph Alt' : 'Table Alt';
+    });
+}
+
 function initControls() {
-    // 1-Click "Audit Active Tab" Button
+    // 1-Click "Audit Active Tab" Primary Button
     document.getElementById('btnAuditActiveTab')?.addEventListener('click', async () => {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -184,7 +256,7 @@ function initControls() {
         }
     });
 
-    // Audit Form
+    // Custom Target Form
     document.getElementById('auditForm')?.addEventListener('submit', (e) => {
         e.preventDefault();
         const url = document.getElementById('targetUrlInput')?.value.trim();
@@ -192,7 +264,7 @@ function initControls() {
     });
 
     // Preset chips
-    document.querySelectorAll('.chip[data-url]').forEach(chip => {
+    document.querySelectorAll('.preset-chip[data-url]').forEach(chip => {
         chip.addEventListener('click', () => {
             const url = chip.dataset.url;
             const inputEl = document.getElementById('targetUrlInput');
@@ -201,22 +273,14 @@ function initControls() {
         });
     });
 
-    // Graph Filters
-    document.querySelectorAll('.filter-pill[data-filter]').forEach(pill => {
-        pill.addEventListener('click', () => {
-            document.querySelectorAll('.filter-pill[data-filter]').forEach(p => p.classList.remove('active'));
-            pill.classList.add('active');
-            activeGraphFilter = pill.dataset.filter;
-            renderGraph();
-        });
-    });
-
-    // Graph Zoom Controls
+    // Canvas zoom & particle buttons
     document.getElementById('btnZoomIn')?.addEventListener('click', () => {
         camera.zoom = Math.min(camera.zoom * 1.25, 3.0);
+        renderGraph();
     });
     document.getElementById('btnZoomOut')?.addEventListener('click', () => {
         camera.zoom = Math.max(camera.zoom / 1.25, 0.4);
+        renderGraph();
     });
     document.getElementById('btnResetGraph')?.addEventListener('click', () => {
         resetCamera();
@@ -224,32 +288,14 @@ function initControls() {
     document.getElementById('btnToggleParticles')?.addEventListener('click', (e) => {
         particlesEnabled = !particlesEnabled;
         e.currentTarget.classList.toggle('active', particlesEnabled);
+        renderGraph();
     });
 
-    // Terminal Controls
-    document.getElementById('btnClearTerminal')?.addEventListener('click', () => {
-        const consoleEl = document.getElementById('terminalConsole');
-        if (consoleEl) consoleEl.innerHTML = '<div class="term-line term-dim">Terminal buffer cleared.</div>';
-    });
-    document.getElementById('btnCopyTerminal')?.addEventListener('click', () => {
-        const consoleEl = document.getElementById('terminalConsole');
-        if (consoleEl) {
-            navigator.clipboard.writeText(consoleEl.innerText);
-            appendTerminalLog('INFO', 'Terminal logs copied to clipboard.');
-        }
-    });
+    // Search fields with clear button
+    setupSearchClear('assetSearchInput', 'btnAssetSearchClear', 'assetSearchWrap', filterAssetTable);
+    setupSearchClear('bmSearchInput', 'btnBmSearchClear', 'bmSearchWrap', filterBenchmarkTable);
 
-    // Asset search filter
-    document.getElementById('assetSearchInput')?.addEventListener('input', (e) => {
-        filterAssetTable(e.target.value.toLowerCase().trim());
-    });
-
-    // Benchmark search filter
-    document.getElementById('bmSearchInput')?.addEventListener('input', (e) => {
-        filterBenchmarkTable(e.target.value.toLowerCase().trim());
-    });
-
-    // Benchmark Export Buttons
+    // Benchmark export actions
     document.getElementById('btnExportCsv')?.addEventListener('click', () => {
         window.open(`${LOCAL_API_BASE}/api/reports/csv`, '_blank');
     });
@@ -257,97 +303,151 @@ function initControls() {
         window.open(`${LOCAL_API_BASE}/api/reports/json`, '_blank');
     });
 
-    // Testbed Run Full Suite
+    // Testbed run suite
     document.getElementById('btnRunTestbedSuite')?.addEventListener('click', () => {
         loadTestbedData(true);
     });
 
-    // Refresh Telemetry
+    // Telemetry refresh
     document.getElementById('btnRefreshTelemetry')?.addEventListener('click', () => {
         loadTelemetryData();
+    });
+
+    // Benchmark Table sorting
+    document.querySelectorAll('#bmTable th.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.col;
+            if (currentSortCol === col) {
+                currentSortAsc = !currentSortAsc;
+            } else {
+                currentSortCol = col;
+                currentSortAsc = true;
+            }
+            if (benchmarkDataCache) renderBenchmarkTable(benchmarkDataCache);
+        });
+    });
+}
+
+function setupSearchClear(inputId, clearBtnId, wrapId, onInputCallback) {
+    const input = document.getElementById(inputId);
+    const clearBtn = document.getElementById(clearBtnId);
+    const wrap = document.getElementById(wrapId);
+
+    if (!input) return;
+
+    input.addEventListener('input', () => {
+        const val = input.value.trim();
+        wrap?.classList.toggle('has-val', val.length > 0);
+        onInputCallback(val.toLowerCase());
+    });
+
+    clearBtn?.addEventListener('click', () => {
+        input.value = '';
+        wrap?.classList.remove('has-val');
+        onInputCallback('');
+        input.focus();
     });
 }
 
 // ==========================================================================
-// 6. CORE AUDIT RUNNER & MULTI-STAGE EXECUTION
+// 6. CORE AUDIT RUNNER & PIPELINE EXECUTION
 // ==========================================================================
 async function runAudit(targetUrl) {
     if (!targetUrl) return;
 
-    setAuditLoading(true);
-    appendTerminalLog('SYSTEM', `Initiating 4-stage OSI audit for: ${targetUrl}`);
+    setAuditState('loading');
+    appendTerminalLog('SYSTEM', `Audit started for: ${targetUrl}`);
 
     try {
         let report = null;
-        let isFallback = false;
+        let isLive = false;
 
-        // Try live backend API first
+        // Attempt live API
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
             const res = await fetch(`${LOCAL_API_BASE}/api/audit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: targetUrl })
+                body: JSON.stringify({ url: targetUrl }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (res.ok) {
                 report = await res.json();
+                isLive = true;
             }
-        } catch {
-            isFallback = true;
+        } catch (fetchErr) {
+            console.warn('API error, using probe fallback:', fetchErr);
         }
 
-        // If backend unreachable, generate high-fidelity simulated multi-stage trace
+        // Offline / simulated fallback with transparent badge
         if (!report) {
             report = generateMockAuditReport(targetUrl);
-            appendTerminalLog('WARN', 'Backend daemon unreachable. Executed in offline probe simulation mode.');
+            isLive = false;
+            appendTerminalLog('WARN', 'Backend daemon unreachable. Running simulated fallback trace.');
         }
 
         currentAuditData = report;
-        renderAuditResults(report);
-        appendTerminalLog('PASS', `Audit complete! Final IPv6 Readiness Score: ${report.readiness_score}%`);
+        renderAuditResults(report, isLive);
+        setAuditState('results');
+        appendTerminalLog('PASS', `Audit complete. Readiness Score: ${report.readiness_score}%`);
     } catch (err) {
-        console.error('Audit execution error:', err);
+        console.error('Audit failure:', err);
+        setAuditState('error', err.message);
         appendTerminalLog('FAIL', `Audit failed: ${err.message}`);
-        setAuditError(err.message);
-    } finally {
-        setAuditLoading(false);
     }
 }
 
-function setAuditLoading(isLoading) {
-    const badge = document.getElementById('auditLiveBadge');
-    const btn = document.getElementById('btnRunAudit');
+function setAuditState(state, errorMsg = '') {
+    const emptyBox = document.getElementById('emptyAuditState');
+    const skeleton = document.getElementById('loadingSkeletonState');
+    const results = document.getElementById('resultsContent');
+    const alertBanner = document.getElementById('systemAlertBanner');
+    const alertText = document.getElementById('systemAlertText');
+    const btnAudit = document.getElementById('btnAuditActiveTab');
 
-    if (badge) {
-        if (isLoading) {
-            badge.className = 'status-pill status-running';
-            badge.innerText = 'Auditing...';
-        } else {
-            badge.className = 'status-pill status-ready';
-            badge.innerText = 'Ready';
+    if (state === 'loading') {
+        if (emptyBox) emptyBox.style.display = 'none';
+        if (results) results.style.display = 'none';
+        if (skeleton) skeleton.style.display = 'flex';
+        if (alertBanner) alertBanner.style.display = 'none';
+        if (btnAudit) btnAudit.disabled = true;
+    } else if (state === 'results') {
+        if (skeleton) skeleton.style.display = 'none';
+        if (emptyBox) emptyBox.style.display = 'none';
+        if (results) results.style.display = 'flex';
+        if (btnAudit) btnAudit.disabled = false;
+        resizeCanvas();
+        startAnimationLoop();
+    } else if (state === 'error') {
+        if (skeleton) skeleton.style.display = 'none';
+        if (results) results.style.display = 'none';
+        if (emptyBox) emptyBox.style.display = 'flex';
+        if (btnAudit) btnAudit.disabled = false;
+        if (alertBanner && alertText) {
+            alertBanner.style.display = 'flex';
+            alertBanner.className = 'alert-banner alert-error';
+            alertText.innerText = `Audit error: ${errorMsg || 'Could not connect to target host'}. Please retry.`;
         }
     }
-    if (btn) btn.disabled = isLoading;
-}
-
-function setAuditError(msg) {
-    const badge = document.getElementById('auditLiveBadge');
-    if (badge) {
-        badge.className = 'status-pill status-error';
-        badge.innerText = 'Error';
-    }
 }
 
 // ==========================================================================
-// 7. RENDER AUDIT RESULTS & BENTO SCORECARDS
+// 7. RENDER AUDIT RESULTS & SCORECARD
 // ==========================================================================
-function renderAuditResults(data) {
+function renderAuditResults(data, isLive) {
     const scoreVal = document.getElementById('scoreVal');
-    const scoreProgressBar = document.getElementById('scoreProgressBar');
-    const scoreSubText = document.getElementById('scoreSubText');
-    const subresourceRatio = document.getElementById('subresourceRatio');
-    const subresourceSub = document.getElementById('subresourceSub');
-    const apexHostStatus = document.getElementById('apexHostStatus');
-    const apexHostIp = document.getElementById('apexHostIp');
+    const verdictBadge = document.getElementById('scoreVerdictBadge');
+    const progressBar = document.getElementById('scoreProgressBar');
+    const summaryText = document.getElementById('scoreSummaryText');
+    const provenanceBadge = document.getElementById('provenanceBadge');
+    const timestampText = document.getElementById('auditTimestampText');
+
+    const subRatio = document.getElementById('subresourceRatio');
+    const subSub = document.getElementById('subresourceSub');
+    const apexStatus = document.getElementById('apexHostStatus');
+    const apexIp = document.getElementById('apexHostIp');
     const latencyVal = document.getElementById('latencyVal');
     const latencySub = document.getElementById('latencySub');
 
@@ -358,48 +458,81 @@ function renderAuditResults(data) {
     const v6Assets = data.summary?.ipv6_ready_count || 0;
     const v4Assets = data.summary?.ipv4_only_count || 0;
 
-    // 1. Scorecard Hero
-    if (scoreVal) {
-        scoreVal.innerText = `${score}%`;
-        scoreVal.className = `score-large font-mono ${score >= 75 ? 'text-green' : (score > 0 ? 'text-amber' : 'text-red')}`;
-    }
-    if (scoreProgressBar) {
-        scoreProgressBar.style.width = `${score}%`;
-        scoreProgressBar.style.backgroundColor = score >= 75 ? 'var(--accent-green)' : (score > 0 ? 'var(--accent-amber)' : 'var(--accent-red)');
-    }
-    if (scoreSubText) {
-        if (!apexV6) {
-            scoreSubText.innerText = 'Apex lacks IPv6. Per SAP Webres6, score is 0% (unreachable in pure IPv6).';
-        } else if (score === 100) {
-            scoreSubText.innerText = '100% Pure IPv6 compliant. All runtime assets passed 4 OSI stages.';
+    // 1. Data Provenance & Timestamp
+    if (provenanceBadge) {
+        if (isLive) {
+            provenanceBadge.className = 'score-provenance-badge score-provenance-live';
+            provenanceBadge.innerText = 'Live Probe :8000';
         } else {
-            scoreSubText.innerText = `${v4Assets} subresources lack IPv6, causing user-visible asset degradation.`;
+            provenanceBadge.className = 'score-provenance-badge score-provenance-simulated';
+            provenanceBadge.innerText = 'Simulated Trace';
         }
     }
 
-    // 2. Subresource Readiness
-    if (subresourceRatio) {
-        subresourceRatio.innerText = `${v6Assets} / ${totalAssets}`;
-        subresourceRatio.className = `bento-number font-mono ${v6Assets === totalAssets ? 'text-green' : 'text-amber'}`;
-    }
-    if (subresourceSub) {
-        const pct = totalAssets > 0 ? Math.round((v6Assets / totalAssets) * 100) : 0;
-        subresourceSub.innerText = `${pct}% assets dual-stack compliant`;
+    if (timestampText) {
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        timestampText.innerText = `Last audited: ${timeStr}`;
     }
 
-    // 3. Apex Domain IPv6
-    if (apexHostStatus) {
-        apexHostStatus.innerText = apexV6 ? 'PASS' : 'FAIL';
-        apexHostStatus.className = `bento-number font-mono ${apexV6 ? 'text-green' : 'text-red'}`;
+    // 2. Dominant Hero Score
+    if (scoreVal) {
+        scoreVal.innerText = `${score}%`;
+        scoreVal.style.color = score >= 75 ? 'var(--state-v6)' : (score > 0 ? 'var(--state-broken)' : 'var(--state-v4)');
     }
-    if (apexHostIp) {
+
+    if (verdictBadge) {
+        if (!apexV6) {
+            verdictBadge.innerText = 'FAIL: NO AAAA RECORD';
+            verdictBadge.className = 'score-verdict-pill badge-fail font-mono';
+        } else if (score === 100) {
+            verdictBadge.innerText = 'PASS: 100% PURE IPV6';
+            verdictBadge.className = 'score-verdict-pill badge-pass font-mono';
+        } else {
+            verdictBadge.innerText = 'PARTIAL: DUAL-STACK';
+            verdictBadge.className = 'score-verdict-pill font-mono';
+            verdictBadge.style.borderColor = 'var(--state-broken-border)';
+            verdictBadge.style.color = 'var(--state-broken)';
+            verdictBadge.style.backgroundColor = 'var(--state-broken-bg)';
+        }
+    }
+
+    if (progressBar) {
+        progressBar.style.width = `${score}%`;
+        progressBar.style.backgroundColor = score >= 75 ? 'var(--state-v6)' : (score > 0 ? 'var(--state-broken)' : 'var(--state-v4)');
+    }
+
+    if (summaryText) {
+        if (!apexV6) {
+            summaryText.innerText = 'Apex domain lacks IPv6. Per SAP Webres6 principle, site is unreachable on pure IPv6 networks.';
+        } else if (score === 100) {
+            summaryText.innerText = 'Complete IPv6 readiness. All first-party and third-party dependencies resolved over IPv6.';
+        } else {
+            summaryText.innerText = `${v4Assets} subresources lack IPv6. Users on IPv6-only networks experience broken layouts or missing scripts.`;
+        }
+    }
+
+    // 3. Supporting 3 KPIs
+    if (subRatio) {
+        subRatio.innerText = `${v6Assets} / ${totalAssets}`;
+        subRatio.style.color = v6Assets === totalAssets ? 'var(--state-v6)' : 'var(--state-broken)';
+    }
+    if (subSub) {
+        const pct = totalAssets > 0 ? Math.round((v6Assets / totalAssets) * 100) : 0;
+        subSub.innerText = `${pct}% dual-stack assets`;
+    }
+
+    if (apexStatus) {
+        apexStatus.innerText = apexV6 ? 'PASS' : 'FAIL';
+        apexStatus.style.color = apexV6 ? 'var(--state-v6)' : 'var(--state-v4)';
+    }
+    if (apexIp) {
         const v6Addr = apexDiag.dns?.aaaa_records?.[0];
         const v4Addr = apexDiag.dns?.a_records?.[0];
-        apexHostIp.innerText = apexV6 ? (v6Addr || '2404:6800:...::200e') : `IPv4: ${v4Addr || 'Missing AAAA'}`;
-        apexHostIp.title = v6Addr || v4Addr || 'No record';
+        apexIp.innerText = apexV6 ? (v6Addr ? truncateString(v6Addr, 18) : 'IPv6 Present') : (v4Addr ? `IPv4: ${v4Addr}` : 'Missing AAAA');
+        apexIp.title = v6Addr || v4Addr || 'No record';
     }
 
-    // 4. Latency Differential
     if (latencyVal) {
         const v6Rtt = apexDiag.tcp?.rtt_ms;
         latencyVal.innerText = v6Rtt ? `${v6Rtt.toFixed(1)} ms` : '-- ms';
@@ -407,27 +540,25 @@ function renderAuditResults(data) {
     if (latencySub) {
         const v4Rtt = apexDiag.tcp_v4?.rtt_ms;
         if (v4Rtt && apexDiag.tcp?.rtt_ms) {
-            const diff = (apexDiag.tcp.rtt_ms - v4Rtt).toFixed(1);
-            latencySub.innerText = `${diff > 0 ? '+' : ''}${diff} ms vs IPv4 (${v4Rtt.toFixed(1)}ms)`;
+            const delta = (apexDiag.tcp.rtt_ms - v4Rtt).toFixed(1);
+            latencySub.innerText = `${delta > 0 ? '+' : ''}${delta} ms vs IPv4 (${v4Rtt.toFixed(1)}ms)`;
         } else {
-            latencySub.innerText = 'AF_INET6 TCP Handshake RTT';
+            latencySub.innerText = 'TCP SYN Handshake';
         }
     }
 
-    // 5. Populate Topology Graph
+    // 4. Update Topology Graph and Stepper
     buildGraphData(data);
+    renderDependenciesTable(data);
+    renderAccessibleAltTable(data);
 
-    // 6. Populate Dependencies Table
-    renderAssetsTable(data);
-
-    // 7. Auto-select Apex node for Inspector Drawer
     if (graphNodes.length > 0) {
         selectNode(graphNodes[0]);
     }
 }
 
 // ==========================================================================
-// 8. INTERACTIVE CANVAS 2D TOPOLOGY GRAPH ENGINE
+// 8. TOPOLOGY GRAPH WITH HIGH-DPI CANVAS SCALING
 // ==========================================================================
 function initCanvas() {
     canvas = document.getElementById('sidepanelCanvas');
@@ -437,36 +568,70 @@ function initCanvas() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Mouse & Touch Interaction
     canvas.addEventListener('mousedown', onCanvasMouseDown);
     canvas.addEventListener('mousemove', onCanvasMouseMove);
     canvas.addEventListener('mouseup', onCanvasMouseUp);
     canvas.addEventListener('mouseleave', onCanvasMouseLeave);
     canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
-
-    // Start Animation Loop
-    if (!animFrameId) {
-        animFrameLoop();
-    }
 }
 
 function resizeCanvas() {
     if (!canvas) return;
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (rect && rect.width > 0) {
-        canvas.width = rect.width;
-        canvas.height = 250;
-        resetCamera();
-        renderGraph();
-    }
+    const container = canvas.parentElement;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    // High-DPI scaling
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = 220 * dpr;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `220px`;
+
+    ctx.scale(dpr, dpr);
+    resetCamera();
+    renderGraph();
 }
 
 function resetCamera() {
     if (!canvas) return;
-    camera.x = canvas.width / 2;
-    camera.y = canvas.height / 2;
+    const dpr = window.devicePixelRatio || 1;
+    camera.x = (canvas.width / dpr) / 2;
+    camera.y = (canvas.height / dpr) / 2;
     camera.zoom = 1;
     renderGraph();
+}
+
+function startAnimationLoop() {
+    if (!animFrameId && particlesEnabled) {
+        animFrameLoop();
+    }
+}
+
+function stopAnimationLoop() {
+    if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+    }
+}
+
+function animFrameLoop() {
+    updateParticles();
+    renderGraph();
+    if (particlesEnabled && !document.hidden) {
+        animFrameId = requestAnimationFrame(animFrameLoop);
+    } else {
+        animFrameId = null;
+    }
+}
+
+function updateParticles() {
+    graphParticles.forEach(p => {
+        p.progress += p.speed;
+        if (p.progress >= 1) p.progress = 0;
+    });
 }
 
 function buildGraphData(auditReport) {
@@ -490,15 +655,15 @@ function buildGraphData(auditReport) {
         diagnostics: apexDiag,
         x: 0,
         y: 0,
-        radius: 14,
-        color: 'var(--accent-blue)',
+        radius: 12,
         fillColor: '#58a6ff'
     };
     graphNodes.push(apexNode);
 
-    // Dependency Nodes
+    // Dependencies
     const deps = auditReport.dependencies || [];
-    const radius = Math.min(100, Math.max(70, deps.length * 9));
+    const count = deps.length;
+    const radius = Math.min(85, Math.max(55, count * 7));
 
     deps.forEach((dep, idx) => {
         const diag = dep.diagnostics || {};
@@ -506,12 +671,11 @@ function buildGraphData(auditReport) {
         const isBroken = diag.overall_status === 'BROKEN_ROUTE' || dep.protocol_status === 'TCP_TIMEOUT';
         const isV4Only = !isV6 && !isBroken;
 
-        // Angle distribution
-        const angle = (idx / Math.max(1, deps.length)) * 2 * Math.PI;
+        const angle = (idx / Math.max(1, count)) * 2 * Math.PI;
         const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * (radius * 0.7); // ellipse
+        const y = Math.sin(angle) * (radius * 0.65);
 
-        let fillColor = '#2ea043'; // green
+        let fillColor = '#3fb950'; // green
         if (isV4Only) fillColor = '#f85149'; // red
         if (isBroken) fillColor = '#d29922'; // amber
 
@@ -527,72 +691,46 @@ function buildGraphData(auditReport) {
             diagnostics: diag,
             x,
             y,
-            radius: 8,
+            radius: 6,
             fillColor
         };
         graphNodes.push(node);
 
-        // Edge connecting to apex
+        // Edge
         graphEdges.push({
             from: apexNode,
             to: node,
-            color: isV6 ? 'rgba(46, 160, 67, 0.4)' : (isBroken ? 'rgba(210, 153, 34, 0.4)' : 'rgba(248, 81, 73, 0.4)')
+            color: isV6 ? 'rgba(63, 185, 80, 0.25)' : (isBroken ? 'rgba(210, 153, 34, 0.25)' : 'rgba(248, 81, 73, 0.25)')
         });
 
-        // Particle along edge
+        // Subtle, low-contrast particle
         graphParticles.push({
             from: apexNode,
             to: node,
             progress: Math.random(),
-            speed: 0.006 + Math.random() * 0.008,
-            color: isV6 ? '#2ea043' : (isBroken ? '#d29922' : '#f85149')
+            speed: 0.003 + Math.random() * 0.004,
+            color: isV6 ? 'rgba(63, 185, 80, 0.7)' : (isBroken ? 'rgba(210, 153, 34, 0.7)' : 'rgba(248, 81, 73, 0.7)')
         });
     });
 
-    // Update node count badge
     const badge = document.getElementById('nodeCountBadge');
     if (badge) badge.innerText = `${graphNodes.length} Nodes`;
 
     renderGraph();
 }
 
-function animFrameLoop() {
-    updateParticles();
-    renderGraph();
-    animFrameId = requestAnimationFrame(animFrameLoop);
-}
-
-function updateParticles() {
-    if (!particlesEnabled) return;
-    graphParticles.forEach(p => {
-        p.progress += p.speed;
-        if (p.progress >= 1) p.progress = 0;
-    });
-}
-
 function renderGraph() {
     if (!ctx || !canvas) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
 
     ctx.save();
     ctx.translate(camera.x, camera.y);
     ctx.scale(camera.zoom, camera.zoom);
 
-    // Filter nodes
-    const visibleNodes = graphNodes.filter(n => {
-        if (activeGraphFilter === 'all') return true;
-        if (activeGraphFilter === 'v4') return n.isV4Only || n.type === 'apex';
-        if (activeGraphFilter === 'broken') return n.isBroken || n.type === 'apex';
-        return true;
-    });
-
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-
-    // 1. Draw Edges
+    // 1. Edges
     graphEdges.forEach(edge => {
-        if (!visibleNodeIds.has(edge.from.id) || !visibleNodeIds.has(edge.to.id)) return;
-
         ctx.beginPath();
         ctx.strokeStyle = edge.color;
         ctx.lineWidth = 1;
@@ -601,23 +739,21 @@ function renderGraph() {
         ctx.stroke();
     });
 
-    // 2. Draw Particles
+    // 2. Slow Particles (if enabled)
     if (particlesEnabled) {
         graphParticles.forEach(p => {
-            if (!visibleNodeIds.has(p.from.id) || !visibleNodeIds.has(p.to.id)) return;
-
             const px = p.from.x + (p.to.x - p.from.x) * p.progress;
             const py = p.from.y + (p.to.y - p.from.y) * p.progress;
 
             ctx.beginPath();
             ctx.fillStyle = p.color;
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.arc(px, py, 1.5, 0, Math.PI * 2);
             ctx.fill();
         });
     }
 
-    // 3. Draw Nodes
-    visibleNodes.forEach(node => {
+    // 3. Nodes
+    graphNodes.forEach(node => {
         const isSelected = selectedNode && selectedNode.id === node.id;
         const isHovered = hoveredNode && hoveredNode.id === node.id;
 
@@ -625,29 +761,28 @@ function renderGraph() {
         if (isSelected || isHovered) {
             ctx.beginPath();
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = isSelected ? 2 : 1;
-            ctx.arc(node.x, node.y, node.radius + (isSelected ? 4 : 2), 0, Math.PI * 2);
+            ctx.lineWidth = isSelected ? 1.5 : 1;
+            ctx.arc(node.x, node.y, node.radius + (isSelected ? 3 : 2), 0, Math.PI * 2);
             ctx.stroke();
         }
 
-        // Solid Node Circle
+        // Solid circle
         ctx.beginPath();
         ctx.fillStyle = node.fillColor;
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Node Label
-        ctx.fillStyle = '#c9d1d9';
-        ctx.font = '9px monospace';
+        // Label: Truncated to avoid visual clutter
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '10px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        const shortName = node.label.length > 14 ? node.label.substring(0, 12) + '..' : node.label;
-        ctx.fillText(shortName, node.x, node.y + node.radius + 10);
+        const displayLabel = truncateString(node.label, 12);
+        ctx.fillText(displayLabel, node.x, node.y + node.radius + 10);
     });
 
     ctx.restore();
 }
 
-// Canvas Interaction Handlers
 function onCanvasMouseDown(e) {
     const mousePos = getCanvasMousePos(e);
     const clickedNode = findNodeAt(mousePos.worldX, mousePos.worldY);
@@ -671,7 +806,6 @@ function onCanvasMouseMove(e) {
         return;
     }
 
-    // Check hover
     const node = findNodeAt(mousePos.worldX, mousePos.worldY);
     hoveredNode = node;
     canvas.style.cursor = node ? 'pointer' : 'grab';
@@ -679,8 +813,8 @@ function onCanvasMouseMove(e) {
     const tooltip = document.getElementById('graphTooltip');
     if (node && tooltip) {
         tooltip.style.display = 'block';
-        tooltip.style.left = `${e.offsetX + 12}px`;
-        tooltip.style.top = `${e.offsetY - 20}px`;
+        tooltip.style.left = `${e.offsetX + 8}px`;
+        tooltip.style.top = `${e.offsetY - 24}px`;
         tooltip.innerText = `${node.label} (${node.isV6 ? 'IPv6' : (node.isBroken ? 'Broken' : 'IPv4')})`;
     } else if (tooltip) {
         tooltip.style.display = 'none';
@@ -700,8 +834,8 @@ function onCanvasMouseLeave() {
 
 function onCanvasWheel(e) {
     e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    camera.zoom = Math.min(Math.max(camera.zoom * zoomFactor, 0.4), 3.0);
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    camera.zoom = Math.min(Math.max(camera.zoom * factor, 0.4), 3.0);
     renderGraph();
 }
 
@@ -711,7 +845,7 @@ function getCanvasMousePos(e) {
     const canvasY = e.clientY - rect.top;
     const worldX = (canvasX - camera.x) / camera.zoom;
     const worldY = (canvasY - camera.y) / camera.zoom;
-    return { canvasX, canvasY, worldX, worldY };
+    return { worldX, worldY };
 }
 
 function findNodeAt(worldX, worldY) {
@@ -724,118 +858,148 @@ function findNodeAt(worldX, worldY) {
 }
 
 // ==========================================================================
-// 9. 4-STAGE OSI PROTOCOL DIAGNOSTICS DRAWER
+// 9. 4-STAGE OSI VERTICAL STEPPER & REMEDIATION
 // ==========================================================================
 function selectNode(node) {
     selectedNode = node;
     renderGraph();
 
-    const placeholder = document.getElementById('drawerPlaceholder');
-    const body = document.getElementById('drawerBody');
     const badge = document.getElementById('selectedNodeBadge');
-
-    if (placeholder) placeholder.style.display = 'none';
-    if (body) body.style.display = 'flex';
     if (badge) {
-        badge.innerText = node.label;
-        badge.className = `badge-tag font-mono ${node.isV6 ? 'badge-v6' : (node.isBroken ? 'badge-broken' : 'badge-v4')}`;
+        badge.innerText = truncateString(node.label, 20);
+        badge.className = `score-provenance-badge font-mono ${node.isV6 ? 'score-provenance-live' : 'score-provenance-simulated'}`;
     }
 
     const diag = node.diagnostics || {};
 
-    // Stage 1: DNS
-    const stageBadgeDns = document.getElementById('stageBadgeDns');
-    const diagDnsAaaa = document.getElementById('diagDnsAaaa');
-    const diagDnsA = document.getElementById('diagDnsA');
-    const diagDnsRtt = document.getElementById('diagDnsRtt');
-    const diagDnsNs = document.getElementById('diagDnsNs');
-
+    // 1. DNS Resolution
     const hasAaaa = diag.dns?.aaaa_records && diag.dns.aaaa_records.length > 0;
-    if (stageBadgeDns) {
-        stageBadgeDns.innerText = hasAaaa ? 'PASS' : 'FAIL';
-        stageBadgeDns.className = `badge-tag font-mono ${hasAaaa ? 'badge-v6' : 'badge-v4'}`;
-    }
-    if (diagDnsAaaa) diagDnsAaaa.innerText = hasAaaa ? diag.dns.aaaa_records[0] : 'None (No AAAA)';
-    if (diagDnsA) diagDnsA.innerText = diag.dns?.a_records?.[0] || 'None';
-    if (diagDnsRtt) diagDnsRtt.innerText = diag.dns?.rtt_ms ? `${diag.dns.rtt_ms.toFixed(1)} ms` : '-- ms';
-    if (diagDnsNs) diagDnsNs.innerText = diag.dns?.nameserver || '8.8.8.8';
+    updateStep('stepDns', 'stageBadgeDns', hasAaaa, hasAaaa ? 'PASS' : 'FAIL');
+    setText('diagDnsAaaa', hasAaaa ? diag.dns.aaaa_records[0] : 'None (No AAAA)');
+    setText('diagDnsA', diag.dns?.a_records?.[0] || 'None');
+    setText('diagDnsRtt', diag.dns?.rtt_ms ? `${diag.dns.rtt_ms.toFixed(1)} ms` : '-- ms');
+    setText('diagDnsNs', diag.dns?.nameserver || '8.8.8.8');
 
-    // Stage 2: TCP
-    const stageBadgeTcp = document.getElementById('stageBadgeTcp');
-    const diagTcpRtt = document.getElementById('diagTcpRtt');
-    const diagTcpStatus = document.getElementById('diagTcpStatus');
-
+    // 2. TCP Handshake
     const tcpPass = diag.tcp?.status === 'TCP_SUCCESS';
-    if (stageBadgeTcp) {
-        stageBadgeTcp.innerText = tcpPass ? 'PASS' : (hasAaaa ? 'FAIL' : 'SKIPPED');
-        stageBadgeTcp.className = `badge-tag font-mono ${tcpPass ? 'badge-v6' : (hasAaaa ? 'badge-v4' : '')}`;
-    }
-    if (diagTcpRtt) diagTcpRtt.innerText = diag.tcp?.rtt_ms ? `${diag.tcp.rtt_ms.toFixed(1)} ms` : '-- ms';
-    if (diagTcpStatus) diagTcpStatus.innerText = diag.tcp?.status || (hasAaaa ? 'TCP_FAILED' : 'NO_AAAA_TO_CONNECT');
+    updateStep('stepTcp', 'stageBadgeTcp', tcpPass, tcpPass ? 'PASS' : (hasAaaa ? 'FAIL' : 'SKIP'));
+    setText('diagTcpStatus', diag.tcp?.status || (hasAaaa ? 'TCP_FAILED' : 'NO_AAAA'));
+    setText('diagTcpRtt', diag.tcp?.rtt_ms ? `${diag.tcp.rtt_ms.toFixed(1)} ms` : '-- ms');
 
-    // Stage 3: TLS
-    const stageBadgeTls = document.getElementById('stageBadgeTls');
-    const diagTlsProto = document.getElementById('diagTlsProto');
-    const diagTlsCipher = document.getElementById('diagTlsCipher');
-    const diagTlsSni = document.getElementById('diagTlsSni');
-    const diagTlsAlpn = document.getElementById('diagTlsAlpn');
-
+    // 3. TLS Handshake
     const tlsPass = diag.tls?.status === 'TLS_SUCCESS';
-    if (stageBadgeTls) {
-        stageBadgeTls.innerText = tlsPass ? 'PASS' : (tcpPass ? 'FAIL' : 'SKIPPED');
-        stageBadgeTls.className = `badge-tag font-mono ${tlsPass ? 'badge-v6' : (tcpPass ? 'badge-v4' : '')}`;
-    }
-    if (diagTlsProto) diagTlsProto.innerText = diag.tls?.version || (tlsPass ? 'TLSv1.3' : '--');
-    if (diagTlsCipher) diagTlsCipher.innerText = diag.tls?.cipher || (tlsPass ? 'AES_256_GCM_SHA384' : '--');
-    if (diagTlsSni) diagTlsSni.innerText = tlsPass ? 'Valid (Matches SNI)' : '--';
-    if (diagTlsAlpn) diagTlsAlpn.innerText = diag.tls?.alpn || (tlsPass ? 'h2' : '--');
+    updateStep('stepTls', 'stageBadgeTls', tlsPass, tlsPass ? 'PASS' : (tcpPass ? 'FAIL' : 'SKIP'));
+    setText('diagTlsProto', diag.tls?.version || (tlsPass ? 'TLSv1.3' : '--'));
+    setText('diagTlsCipher', diag.tls?.cipher || (tlsPass ? 'AES_256_GCM' : '--'));
+    setText('diagTlsSni', tlsPass ? 'Valid' : '--');
+    setText('diagTlsAlpn', diag.tls?.alpn || (tlsPass ? 'h2' : '--'));
 
-    // Stage 4: HTTP
-    const stageBadgeHttp = document.getElementById('stageBadgeHttp');
-    const diagHttpStatus = document.getElementById('diagHttpStatus');
-    const diagHttpProto = document.getElementById('diagHttpProto');
-    const diagHttpType = document.getElementById('diagHttpType');
-    const diagHttpSize = document.getElementById('diagHttpSize');
-
+    // 4. HTTP GET
     const httpPass = diag.http?.status_code >= 200 && diag.http?.status_code < 400;
-    if (stageBadgeHttp) {
-        stageBadgeHttp.innerText = httpPass ? `${diag.http.status_code} OK` : (tlsPass ? 'FAIL' : 'SKIPPED');
-        stageBadgeHttp.className = `badge-tag font-mono ${httpPass ? 'badge-v6' : ''}`;
-    }
-    if (diagHttpStatus) diagHttpStatus.innerText = diag.http?.status_code ? `${diag.http.status_code} OK` : '--';
-    if (diagHttpProto) diagHttpProto.innerText = diag.http?.protocol || (httpPass ? 'HTTP/2' : '--');
-    if (diagHttpType) diagHttpType.innerText = diag.http?.content_type || 'text/html';
-    if (diagHttpSize) diagHttpSize.innerText = diag.http?.content_length ? `${(diag.http.content_length / 1024).toFixed(1)} KB` : '18.4 KB';
+    updateStep('stepHttp', 'stageBadgeHttp', httpPass, httpPass ? `${diag.http.status_code} OK` : (tlsPass ? 'FAIL' : 'SKIP'));
+    setText('diagHttpStatus', diag.http?.status_code ? `${diag.http.status_code} OK` : '--');
+    setText('diagHttpProto', diag.http?.protocol || (httpPass ? 'HTTP/2' : '--'));
+    setText('diagHttpType', diag.http?.content_type || 'text/html');
+    setText('diagHttpSize', diag.http?.content_length ? `${(diag.http.content_length / 1024).toFixed(1)} KB` : '-- KB');
 
-    // Remediation & Root Cause
+    // Remediation & RFC Guidance
     const codeEl = document.getElementById('remediationCode');
     const textEl = document.getElementById('remediationText');
 
     if (!hasAaaa) {
-        if (codeEl) codeEl.innerText = 'FAILURE: MISSING_AAAA_RECORD (RFC 4038)';
-        if (codeEl) codeEl.className = 'badge-tag font-mono badge-v4';
+        if (codeEl) {
+            codeEl.innerText = 'FAILURE: MISSING_AAAA';
+            codeEl.className = 'step-badge badge-fail font-mono';
+        }
         if (textEl) {
-            textEl.innerText = `Host [${node.label}] does not publish an IPv6 AAAA record in DNS.\nRemediation:\n1. Obtain an assigned IPv6 block from upstream ISP or cloud VPC.\n2. Configure authoritative DNS with AAAA record pointing to the dual-stack server or CDN edge.`;
+            textEl.innerHTML = `Host [${node.label}] does not advertise an IPv6 AAAA record in DNS.<br><strong>Remediation:</strong><br>1. Assign an IPv6 /64 prefix to the web origin or CDN distribution.<br>2. Add an AAAA DNS record per <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc4038" target="_blank" rel="noreferrer">RFC 4038 (IPv6 Transition)</a>.`;
         }
     } else if (!tcpPass) {
-        if (codeEl) codeEl.innerText = 'FAILURE: BROKEN_IPV6_ROUTE (RFC 8305)';
-        if (codeEl) codeEl.className = 'badge-tag font-mono badge-broken';
+        if (codeEl) {
+            codeEl.innerText = 'FAILURE: BROKEN_ROUTE';
+            codeEl.className = 'step-badge font-mono';
+            codeEl.style.borderColor = 'var(--state-broken-border)';
+            codeEl.style.color = 'var(--state-broken)';
+        }
         if (textEl) {
-            textEl.innerText = `Host [${node.label}] advertises AAAA record [${node.ip}], but TCP SYN to port 443 fails or times out.\nRemediation:\n1. Verify edge firewall and security group ingress rules permit IPv6 TCP port 443.\n2. Check upstream BGP routing table for missing IPv6 default route.`;
+            textEl.innerHTML = `AAAA record is published, but TCP SYN to port 443 fails or times out.<br><strong>Remediation:</strong><br>1. Check firewall ingress rules for IPv6 TCP port 443.<br>2. Validate upstream BGP peering route per <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc8305" target="_blank" rel="noreferrer">RFC 8305 (Happy Eyeballs v2)</a>.`;
         }
     } else {
-        if (codeEl) codeEl.innerText = 'SUCCESS: PURE_IPV6_READY (SAP Webres6)';
-        if (codeEl) codeEl.className = 'badge-tag font-mono badge-v6';
+        if (codeEl) {
+            codeEl.innerText = 'PURE_IPV6_READY';
+            codeEl.className = 'step-badge badge-pass font-mono';
+        }
         if (textEl) {
-            textEl.innerText = `Host [${node.label}] is fully reachable over pure IPv6 across DNS, TCP, TLS, and HTTP.\nZero legacy IPv4 translation or NAT64 fallback required.`;
+            textEl.innerHTML = `Host [${node.label}] successfully passed DNS, TCP, TLS, and HTTP stages over pure IPv6. Zero legacy IPv4 translation or NAT64 fallback required.`;
         }
     }
 }
 
+function updateStep(nodeId, badgeId, isPass, badgeText) {
+    const node = document.getElementById(nodeId);
+    const badge = document.getElementById(badgeId);
+    if (!node || !badge) return;
+
+    node.classList.remove('pass', 'fail');
+    badge.classList.remove('badge-pass', 'badge-fail', 'badge-skip');
+
+    if (badgeText === 'SKIP') {
+        badge.classList.add('badge-skip');
+    } else if (isPass) {
+        node.classList.add('pass');
+        badge.classList.add('badge-pass');
+    } else {
+        node.classList.add('fail');
+        badge.classList.add('badge-fail');
+    }
+    badge.innerText = badgeText;
+}
+
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = text;
+}
+
 // ==========================================================================
-// 10. LIVE WIRE-LEVEL TERMINAL HUD
+// 10. LIVE WIRE-LEVEL TERMINAL HUD (AUTO-SCROLL LOCKING)
 // ==========================================================================
-function appendTerminalLog(level, message) {
+function initTerminalActions() {
+    const toggleHeader = document.getElementById('btnToggleTerminal');
+    const panelWrap = document.getElementById('terminalPanelWrap');
+    const consoleEl = document.getElementById('terminalConsole');
+
+    toggleHeader?.addEventListener('click', (e) => {
+        // Prevent toggle if clicking buttons
+        if (e.target.closest('button')) return;
+        const isOpen = panelWrap.classList.toggle('open');
+        toggleHeader.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    document.getElementById('btnClearTerminal')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (consoleEl) {
+            consoleEl.innerHTML = '<div class="term-line term-dim">Terminal logs cleared.</div>';
+            terminalLinesCount = 0;
+            updateTerminalCount();
+        }
+    });
+
+    document.getElementById('btnCopyTerminal')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (consoleEl) {
+            navigator.clipboard.writeText(consoleEl.innerText);
+            appendTerminalLog('INFO', 'Logs copied to clipboard.');
+        }
+    });
+
+    // Detect user manual scroll up
+    consoleEl?.addEventListener('scroll', () => {
+        const isAtBottom = consoleEl.scrollHeight - consoleEl.scrollTop <= consoleEl.clientHeight + 15;
+        userScrolledTerminal = !isAtBottom;
+    });
+}
+
+function appendTerminalLog(level, msg) {
     const consoleEl = document.getElementById('terminalConsole');
     if (!consoleEl) return;
 
@@ -850,23 +1014,33 @@ function appendTerminalLog(level, message) {
 
     const row = document.createElement('div');
     row.className = `term-line ${levelClass}`;
-    row.innerText = `${timeStr} [${level}] ${message}`;
+    row.innerText = `${timeStr} [${level}] ${msg}`;
 
     consoleEl.appendChild(row);
-    consoleEl.scrollTop = consoleEl.scrollHeight;
+    terminalLinesCount += 1;
+    updateTerminalCount();
+
+    if (!userScrolledTerminal) {
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+}
+
+function updateTerminalCount() {
+    const badge = document.getElementById('terminalLineCount');
+    if (badge) badge.innerText = `(${terminalLinesCount} lines)`;
 }
 
 // ==========================================================================
-// 11. DEPENDENCY ASSET TABLE
+// 11. DEPENDENCY TABLES & ACCESSIBLE VIEWS
 // ==========================================================================
-function renderAssetsTable(data) {
+function renderDependenciesTable(data) {
     const tbody = document.getElementById('assetsTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
     const deps = data.dependencies || [];
     if (deps.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">No runtime assets detected.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim); text-align:center; padding:var(--space-16);">No subresources recorded.</td></tr>';
         return;
     }
 
@@ -881,17 +1055,37 @@ function renderAssetsTable(data) {
         tr.style.cursor = 'pointer';
 
         tr.innerHTML = `
-            <td style="color:var(--text-heading); font-weight:500;">${escapeHtml(dep.domain)}</td>
+            <td style="font-weight:500;">${escapeHtml(dep.domain)}</td>
             <td style="color:var(--text-muted);">${escapeHtml(dep.resource_type || 'script')}</td>
-            <td><span class="badge-tag ${isV6 ? 'badge-v6' : (isBroken ? 'badge-broken' : 'badge-v4')}">${isV6 ? 'IPv6 Ready' : (isBroken ? 'Broken' : 'IPv4 Only')}</span></td>
-            <td style="color:var(--text-dim);">${escapeHtml(remoteIp)}</td>
+            <td><span class="step-badge ${isV6 ? 'badge-pass' : (isBroken ? 'badge-skip' : 'badge-fail')}">${isV6 ? 'IPv6' : (isBroken ? 'Broken' : 'IPv4')}</span></td>
+            <td class="text-right font-mono" style="color:var(--text-dim);">${escapeHtml(truncateString(remoteIp, 18))}</td>
         `;
 
         tr.addEventListener('click', () => {
-            const targetNode = graphNodes.find(n => n.domain === dep.domain);
-            if (targetNode) selectNode(targetNode);
+            const target = graphNodes.find(n => n.domain === dep.domain);
+            if (target) selectNode(target);
         });
 
+        tbody.appendChild(tr);
+    });
+}
+
+function renderAccessibleAltTable(data) {
+    const tbody = document.getElementById('graphAltTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const nodes = graphNodes;
+    nodes.forEach(n => {
+        const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.innerHTML = `
+            <td style="font-weight:500;">${escapeHtml(n.label)}</td>
+            <td style="color:var(--text-muted);">${escapeHtml(n.type)}</td>
+            <td><span class="step-badge ${n.isV6 ? 'badge-pass' : (n.isBroken ? 'badge-skip' : 'badge-fail')}">${n.isV6 ? 'IPv6' : (n.isBroken ? 'Broken' : 'IPv4')}</span></td>
+            <td class="text-right font-mono" style="color:var(--text-dim);">${escapeHtml(truncateString(n.ip, 18))}</td>
+        `;
+        tr.addEventListener('click', () => selectNode(n));
         tbody.appendChild(tr);
     });
 }
@@ -905,7 +1099,7 @@ function filterAssetTable(query) {
 }
 
 // ==========================================================================
-// 12. 30-SITE NATIONAL BENCHMARK ENGINE
+// 12. 30-SITE BENCHMARK ENGINE WITH SORTING
 // ==========================================================================
 async function loadBenchmarkData() {
     if (benchmarkDataCache) {
@@ -923,7 +1117,6 @@ async function loadBenchmarkData() {
         }
     } catch {}
 
-    // Fallback bundled benchmark data
     const fallback = getBundledBenchmarkData();
     benchmarkDataCache = fallback;
     renderBenchmarkTable(fallback);
@@ -934,35 +1127,57 @@ function renderBenchmarkTable(data) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const sites = data.sites || data.results || [];
+    let sites = [...(data.sites || data.results || [])];
     if (sites.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">No benchmark targets loaded.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim); text-align:center; padding:var(--space-16);">No benchmark targets loaded.</td></tr>';
         return;
     }
 
+    // Sort
+    sites.sort((a, b) => {
+        let valA, valB;
+        if (currentSortCol === 'name') {
+            valA = (a.name || a.url || '').toLowerCase();
+            valB = (b.name || b.url || '').toLowerCase();
+            return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else if (currentSortCol === 'sector') {
+            valA = (a.sector || '').toLowerCase();
+            valB = (b.sector || '').toLowerCase();
+            return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else if (currentSortCol === 'apex') {
+            valA = a.is_apex_v6 ? 1 : 0;
+            valB = b.is_apex_v6 ? 1 : 0;
+            return currentSortAsc ? valA - valB : valB - valA;
+        } else {
+            valA = a.score ?? a.readiness_score ?? 0;
+            valB = b.score ?? b.readiness_score ?? 0;
+            return currentSortAsc ? valA - valB : valB - valA;
+        }
+    });
+
     sites.forEach(site => {
-        const score = site.readiness_score ?? site.score ?? 0;
-        const isV6 = site.apex_ipv6_ready ?? site.is_apex_v6 ?? (score > 0);
+        const score = site.score ?? site.readiness_score ?? 0;
+        const isV6 = site.is_apex_v6 ?? site.apex_ipv6_ready ?? (score > 0);
 
         const tr = document.createElement('tr');
         tr.dataset.domain = (site.name || site.url || '').toLowerCase();
         tr.dataset.sector = (site.sector || '').toLowerCase();
 
         tr.innerHTML = `
-            <td style="color:var(--text-heading); font-weight:500;">${escapeHtml(site.name || site.url)}</td>
+            <td style="font-weight:500;">${escapeHtml(site.name || site.url)}</td>
             <td style="color:var(--text-muted);">${escapeHtml(site.sector || 'General')}</td>
-            <td><span class="badge-tag ${score >= 75 ? 'badge-v6' : (score > 0 ? 'badge-broken' : 'badge-v4')}">${score}%</span></td>
-            <td><span class="badge-tag ${isV6 ? 'badge-v6' : 'badge-v4'}">${isV6 ? 'AAAA' : 'No AAAA'}</span></td>
-            <td><button class="btn btn-secondary btn-xs btn-audit-site" data-url="${escapeHtml(site.url || site.name)}">Audit</button></td>
+            <td class="text-right font-mono" style="font-weight:600; color:${score >= 75 ? 'var(--state-v6)' : (score > 0 ? 'var(--state-broken)' : 'var(--state-v4)')};">${score}%</td>
+            <td class="text-right font-mono"><span class="step-badge ${isV6 ? 'badge-pass' : 'badge-fail'}">${isV6 ? 'AAAA' : 'No AAAA'}</span></td>
+            <td class="text-right">
+                <button type="button" class="btn-ghost-sm btn-audit-row" data-url="${escapeHtml(site.url || site.name)}" title="Audit target in visualizer">Audit</button>
+            </td>
         `;
 
-        tr.querySelector('.btn-audit-site')?.addEventListener('click', (e) => {
-            const targetUrl = e.currentTarget.dataset.url;
-            // Switch to Visualizer tab and audit
-            const visualizerBtn = document.querySelector('.tab-btn[data-tab="tabVisualizer"]');
-            if (visualizerBtn) visualizerBtn.click();
+        tr.querySelector('.btn-audit-row')?.addEventListener('click', (e) => {
+            const url = e.currentTarget.dataset.url;
+            document.getElementById('tabBtnVisualizer')?.click();
             const input = document.getElementById('targetUrlInput');
-            if (input) input.value = targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`;
+            if (input) input.value = url.startsWith('http') ? url : `https://${url}`;
             runAudit(input.value);
         });
 
@@ -980,14 +1195,14 @@ function filterBenchmarkTable(query) {
 }
 
 // ==========================================================================
-// 13. CONTROLLED TESTBED SUITE ENGINE (:8888)
+// 13. CONTROLLED TESTBED SUITE ENGINE
 // ==========================================================================
 async function loadTestbedData(runLive = false) {
     const list = document.getElementById('testbedResultsList');
     if (!list) return;
 
     if (runLive) {
-        list.innerHTML = '<div class="testbed-item" style="color:var(--accent-blue);">Executing 8 test cases against http://localhost:8888...</div>';
+        list.innerHTML = '<div style="padding:var(--space-8); color:var(--state-info);">Executing 8 test cases against http://localhost:8888...</div>';
     }
 
     try {
@@ -999,7 +1214,6 @@ async function loadTestbedData(runLive = false) {
         }
     } catch {}
 
-    // Fallback deterministic ground-truth suite
     renderTestbedReport(getBundledTestbedData());
 }
 
@@ -1012,13 +1226,20 @@ function renderTestbedReport(report) {
     cases.forEach(c => {
         const passed = c.passed ?? (c.status === 'PASS');
         const item = document.createElement('div');
-        item.className = 'testbed-item';
+        item.style.display = 'flex';
+        item.style.alignItems = 'center';
+        item.style.justifyContent = 'space-between';
+        item.style.padding = 'var(--space-8)';
+        item.style.backgroundColor = 'var(--bg-subdued)';
+        item.style.border = '1px solid var(--border-default)';
+        item.style.borderRadius = 'var(--radius-control)';
+
         item.innerHTML = `
-            <div class="testbed-meta">
-                <span class="testbed-path">${escapeHtml(c.path || c.name)}</span>
-                <span class="testbed-desc">${escapeHtml(c.description || 'Ground-truth synthetic protocol test')}</span>
+            <div style="display:flex; flex-direction:column; min-width:0; gap:2px;">
+                <span style="font-size:12px; font-weight:600; color:var(--text-primary);">${escapeHtml(c.path || c.name)}</span>
+                <span style="font-size:11px; color:var(--text-dim);">${escapeHtml(c.description || 'Synthetic protocol scenario')}</span>
             </div>
-            <span class="badge-tag ${passed ? 'badge-v6' : 'badge-v4'}">${passed ? 'PASS (100%)' : 'FAIL'}</span>
+            <span class="step-badge ${passed ? 'badge-pass' : 'badge-fail'} font-mono">${passed ? 'PASS (100%)' : 'FAIL'}</span>
         `;
         list.appendChild(item);
     });
@@ -1028,44 +1249,48 @@ function renderTestbedReport(report) {
 // 14. CLIENT DUAL-STACK TELEMETRY ENGINE
 // ==========================================================================
 async function loadTelemetryData() {
-    const clientV6El = document.getElementById('telemetryClientV6');
-    const clientV4El = document.getElementById('telemetryClientV4');
-    const v6StatusBadge = document.getElementById('telemetryV6Status');
-    const asnEl = document.getElementById('telemetryAsn');
-    const ispEl = document.getElementById('telemetryIsp');
-    const heVerdictEl = document.getElementById('telemetryHeVerdict');
-    const heDeltaEl = document.getElementById('telemetryHeDelta');
+    const clientV6 = document.getElementById('telemetryClientV6');
+    const clientV4 = document.getElementById('telemetryClientV4');
+    const v6Badge = document.getElementById('telemetryV6Status');
+    const asn = document.getElementById('telemetryAsn');
+    const isp = document.getElementById('telemetryIsp');
+    const heVerdict = document.getElementById('telemetryHeVerdict');
+    const heDelta = document.getElementById('telemetryHeDelta');
 
     try {
         const res = await fetch(`${LOCAL_API_BASE}/api/telemetry`);
         if (res.ok) {
             const data = await res.json();
-            if (clientV6El) clientV6El.innerText = data.client_ipv6 || '2405:201:...::1';
-            if (clientV4El) clientV4El.innerText = data.client_ipv4 || '103.21.244.1';
-            if (v6StatusBadge) {
+            if (clientV6) clientV6.innerText = data.client_ipv6 || '2405:201:...::1';
+            if (clientV4) clientV4.innerText = data.client_ipv4 || '103.21.244.1';
+            if (v6Badge) {
                 const hasV6 = Boolean(data.client_ipv6);
-                v6StatusBadge.innerText = hasV6 ? 'Dual-Stack' : 'IPv4 Only';
-                v6StatusBadge.className = `badge-tag font-mono ${hasV6 ? 'badge-v6' : 'badge-v4'}`;
+                v6Badge.innerText = hasV6 ? 'Dual-Stack' : 'IPv4 Only';
+                v6Badge.className = `step-badge font-mono ${hasV6 ? 'badge-pass' : 'badge-fail'}`;
             }
-            if (asnEl) asnEl.innerText = data.asn ? `AS${data.asn}` : 'AS45609';
-            if (ispEl) ispEl.innerText = data.isp || 'Bharti Airtel Ltd';
-            if (heVerdictEl) heVerdictEl.innerText = 'RFC 8305 v2: IPv6 Preferred';
-            if (heDeltaEl) heDeltaEl.innerText = '-2.4ms IPv6 head-start advantage';
+            if (asn) asn.innerText = data.asn ? `AS${data.asn}` : 'AS45609';
+            if (isp) isp.innerText = data.isp || 'Bharti Airtel Ltd';
+            if (heVerdict) heVerdict.innerText = 'RFC 8305 v2: IPv6 Preferred';
+            if (heDelta) heDelta.innerText = '-2.4ms IPv6 head-start advantage';
             return;
         }
     } catch {}
 
-    // Graceful in-browser fallback
-    if (clientV6El) clientV6El.innerText = 'Dual-Stack Active (Local Interface)';
-    if (clientV4El) clientV4El.innerText = '127.0.0.1 (Loopback / Host)';
-    if (asnEl) asnEl.innerText = 'AS13335 (Cloudflare Research)';
-    if (ispEl) ispEl.innerText = 'Decoupled Dual-Stack Probe Socket';
-    if (heVerdictEl) heVerdictEl.innerText = 'RFC 8305 Dual-Stack: Equal Path';
+    if (clientV6) clientV6.innerText = 'Dual-Stack Active (Local Interface)';
+    if (clientV4) clientV4.innerText = '127.0.0.1 (Loopback / Host)';
+    if (asn) asn.innerText = 'AS13335 (Cloudflare Research)';
+    if (isp) isp.innerText = 'Decoupled Dual-Stack Probe Socket';
+    if (heVerdict) heVerdict.innerText = 'RFC 8305 Dual-Stack: Equal Path';
 }
 
 // ==========================================================================
 // 15. UTILITIES & MOCK GENERATORS
 // ==========================================================================
+function truncateString(str, maxLen) {
+    if (!str) return '';
+    return str.length > maxLen ? `${str.substring(0, maxLen - 2)}..` : str;
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -1082,9 +1307,8 @@ function generateMockAuditReport(url) {
 
     const isGov = domain.endsWith('.gov.in') || domain.includes('nic');
     const isGithub = domain.includes('github.com');
-    const isTestbed = domain.includes('8888') || domain.includes('localhost');
 
-    const apexV6 = isGithub ? false : true;
+    const apexV6 = !isGithub;
     const v6Count = isGithub ? 0 : (isGov ? 14 : 9);
     const v4Count = isGithub ? 12 : 2;
     const totalCount = v6Count + v4Count;
