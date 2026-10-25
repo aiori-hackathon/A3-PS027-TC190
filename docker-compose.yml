@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  ipv6-auditor:
+    build: .
+    container_name: aiori_ipv6_auditor
+    ports:
+      - "8000:8000"
+      - "8888:8888"
+    environment:
+      - PORT=8000
+      - TESTBED_PORT=8888
+    restart: unless-stopped

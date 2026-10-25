@@ -14,11 +14,11 @@ DOCS_DIR = BASE_DIR / "docs"
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Server Ports
-API_PORT = 8000
-TESTBED_PORT = 8888
-API_HOST = "0.0.0.0"
-TESTBED_HOST = "0.0.0.0"
+# Server Ports (Supports Cloud dynamic $PORT e.g. Render, Railway, Fly.io)
+API_PORT = int(os.environ.get("PORT", os.environ.get("API_PORT", 8000)))
+TESTBED_PORT = int(os.environ.get("TESTBED_PORT", 8888))
+API_HOST = os.environ.get("API_HOST", "0.0.0.0")
+TESTBED_HOST = os.environ.get("TESTBED_HOST", "0.0.0.0")
 
 # Timeouts (seconds)
 DNS_TIMEOUT = 2.5
