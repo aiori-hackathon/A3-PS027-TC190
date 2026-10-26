@@ -36,6 +36,30 @@
 ---
 
 ## Privacy & Data Use Disclosures
+- **Privacy Policy URL**: `https://github.com/your-username/Aiori/blob/main/PRIVACY.md` (or hosted GitHub Pages URL)
 - **Data Collection**: None. The extension does not collect, log, sell, or transmit personal data, browsing history, or user identifiers.
 - **Data Processing**: All network socket measurements and IP address evaluations occur strictly in-memory on the user's local machine.
 - **Remote Communications**: The extension makes zero external tracking calls. Network socket probes are executed locally or against the user's configured local auditor API daemon.
+
+---
+
+## Distribution Options
+
+### Option 1: Chrome Web Store (Public 1-Click Install)
+1. Go to the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
+2. Pay the one-time $5 developer registration fee if you haven't already.
+3. Click **"New Item"** and upload the pre-packaged `extension.zip` generated in the project root.
+4. Fill in the store listing using the exact copy from **Extension Metadata** and **Permissions Justification** above.
+5. Provide the Privacy Policy link (`PRIVACY.md`).
+6. Click **"Submit for Review"** (typically approved within 24–48 hours).
+
+### Option 2: Instant Distribution (GitHub Release / Sideloading for Judges & Testers)
+For immediate distribution without waiting for Chrome Web Store review:
+1. Provide `extension.zip` as a downloadable asset on GitHub Releases.
+2. Instruct users to:
+   - Download and unzip `extension.zip`.
+   - Open Chrome and navigate to `chrome://extensions/`.
+   - Toggle **"Developer mode"** in the top right.
+   - Click **"Load unpacked"** and select the unzipped folder.
+   - The extension will instantly appear in their Chrome toolbar and Side Panel!
+

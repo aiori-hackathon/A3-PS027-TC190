@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCanvasEvents();
     initPresetChips();
     initTerminalActions();
+    initTestbedActions();
     loadTelemetryContext();
     loadBenchmarkData();
     loadTestbedVerification();
@@ -161,12 +162,19 @@ async function runAudit(url) {
         
         // Log individual host probe summaries to terminal
         if (data.host_diagnostics) {
-            Object.entries(data.host_diagnostics).slice(0, 16).forEach(([domain, diag]) => {
-                const stage = diag.failed_stage || 'HTTP';
+            const entries = Object.entries(data.host_diagnostics);
+            const maxLog = 100;
+            entries.slice(0, maxLog).forEach(([domain, diag]) => {
+                const stage = diag.is_ipv6_ready ? 'HTTP' : (diag.failed_at_stage || 'DNS');
                 const statusStr = diag.is_ipv6_ready ? 'IPv6 READY' : `${diag.overall_status}`;
                 const pass = diag.is_ipv6_ready;
-                logToTerminal(stage, `${domain} -> ${statusStr} (IPv6: ${diag.ipv6_ttfb_ms || diag.tcp_rtt_ms || '--'}ms)`, pass);
+                const rttVal = diag.stages?.http?.ttfb_ms ?? diag.stages?.tcp?.rtt_ms ?? null;
+                const rttDisplay = rttVal !== null ? `${rttVal}ms` : '--';
+                logToTerminal(stage, `${domain} -> ${statusStr} (IPv6: ${rttDisplay})`, pass);
             });
+            if (entries.length > maxLog) {
+                logToTerminal('SYSTEM', `+${entries.length - maxLog} more hosts discovered and diagnosed.`, true);
+            }
         }
 
         if (auditStatusPill) {
@@ -594,7 +602,8 @@ function initCanvasEvents() {
             tooltip.style.left = `${e.clientX - rect.left + 14}px`;
             tooltip.style.top = `${e.clientY - rect.top + 14}px`;
             
-            const rttStr = hitNode.diag?.tcp_rtt_ms ? `${hitNode.diag.tcp_rtt_ms}ms` : '--';
+            const tcpRtt = hitNode.diag?.stages?.tcp?.rtt_ms;
+            const rttStr = (tcpRtt !== undefined && tcpRtt !== null) ? `${tcpRtt}ms` : '--';
             tooltip.innerHTML = `
                 <div><strong>${escapeHtml(hitNode.domain || hitNode.label || '')}</strong></div>
                 <div style="color:var(--text-muted); font-size:0.68rem; margin-top:2px;">
@@ -680,19 +689,83 @@ function showDrawerNode(node) {
     const pass = diag.is_ipv6_ready ?? false;
     const overall = diag.overall_status ?? 'UNKNOWN';
 
-    // 4-Stage Breakdown
-    const dnsStage = diag.dns_stage || {};
-    const tcpStage = diag.tcp_stage || {};
-    const tlsStage = diag.tls_stage || {};
-    const httpStage = diag.http_stage || {};
+    // 4-Stage Breakdown & Baseline
+    const stages = diag.stages || {};
+    const notReachedTag = '<span class="stage-tag" style="background-color:var(--bg-muted); color:var(--text-muted); border-color:var(--border-default);">Not reached</span>';
 
-    const dnsPass = dnsStage.has_aaaa === true;
-    const tcpPass = tcpStage.connected === true;
-    const tlsPass = tlsStage.handshake_ok === true;
-    const httpPass = httpStage.status_code && httpStage.status_code < 400;
+    // Stage 1: DNS
+    const dns = stages.dns;
+    let dnsTagHtml = '';
+    let dnsDetailsHtml = '';
+    if (!dns) {
+        dnsTagHtml = notReachedTag;
+        dnsDetailsHtml = 'Stage not reached.';
+    } else if (dns.has_aaaa) {
+        const firstAaaa = dns.aaaa_records?.[0] || 'Present';
+        dnsTagHtml = '<span class="stage-tag tag-pass">PASS</span>';
+        dnsDetailsHtml = `IPv6: <span style="color:var(--text-primary);">${escapeHtml(firstAaaa)}</span> | Status: ${escapeHtml(dns.status || 'AAAA_EXISTS')}`;
+    } else {
+        dnsTagHtml = '<span class="stage-tag tag-fail">FAIL</span>';
+        dnsDetailsHtml = `Status: ${escapeHtml(dns.error_detail || dns.status || 'Missing AAAA record in DNS zone.')}`;
+    }
 
-    const v4Ttfb = diag.ipv4_ttfb_ms || 0;
-    const v6Ttfb = diag.ipv6_ttfb_ms || 0;
+    // Stage 2: TCP
+    const tcp = stages.tcp;
+    let tcpTagHtml = '';
+    let tcpDetailsHtml = '';
+    if (!tcp) {
+        tcpTagHtml = notReachedTag;
+        tcpDetailsHtml = 'Stage not reached due to prior failure.';
+    } else if (tcp.status === 'TCP_SUCCESS') {
+        const rtt = tcp.rtt_ms ?? 0;
+        tcpTagHtml = `<span class="stage-tag tag-pass">${rtt}ms</span>`;
+        tcpDetailsHtml = `3-Way Handshake established on port ${diag.port || 443}. RTT: <span style="color:var(--text-primary);">${rtt}ms</span>`;
+    } else {
+        tcpTagHtml = `<span class="stage-tag tag-fail">${escapeHtml(tcp.error_code || 'FAIL')}</span>`;
+        const codePrefix = tcp.error_code ? `[${escapeHtml(tcp.error_code)}] ` : '';
+        tcpDetailsHtml = `Socket connect failed: ${codePrefix}${escapeHtml(tcp.error_detail || 'Connection failed')}`;
+    }
+
+    // Stage 3: TLS
+    const tls = stages.tls;
+    let tlsTagHtml = '';
+    let tlsDetailsHtml = '';
+    if (!tls) {
+        tlsTagHtml = notReachedTag;
+        tlsDetailsHtml = 'Stage not reached due to prior failure.';
+    } else if (tls.status === 'TLS_SUCCESS') {
+        tlsTagHtml = `<span class="stage-tag tag-pass">${escapeHtml(tls.tls_version || 'PASS')}</span>`;
+        tlsDetailsHtml = `Protocol: ${escapeHtml(tls.tls_version || '--')} | Cipher: ${escapeHtml(tls.cipher || '--')}`;
+    } else {
+        tlsTagHtml = '<span class="stage-tag tag-fail">FAIL</span>';
+        tlsDetailsHtml = `TLS handshake failed: ${escapeHtml(tls.error_detail || 'Handshake failed')}`;
+    }
+
+    // Stage 4: HTTP
+    const http = stages.http;
+    let httpTagHtml = '';
+    let httpDetailsHtml = '';
+    if (!http) {
+        httpTagHtml = notReachedTag;
+        httpDetailsHtml = 'Stage not reached due to prior failure.';
+    } else if (http.status === 'HTTP_SUCCESS' || http.status === 'HTTP_4XX_CLIENT_ERROR') {
+        const statusTag = http.http_status_code ? `HTTP ${http.http_status_code}` : 'PASS';
+        httpTagHtml = `<span class="stage-tag tag-pass">${escapeHtml(statusTag)}</span>`;
+        httpDetailsHtml = `${escapeHtml(http.status_line || `HTTP ${http.http_status_code || 200}`)} | TTFB: <span style="color:var(--text-primary);">${http.ttfb_ms ?? 0}ms</span>`;
+    } else {
+        const statusTag = http.http_status_code ? `HTTP ${http.http_status_code}` : 'FAIL';
+        httpTagHtml = `<span class="stage-tag tag-fail">${escapeHtml(statusTag)}</span>`;
+        const linePrefix = http.status_line ? `${escapeHtml(http.status_line)} - ` : '';
+        httpDetailsHtml = `${linePrefix}${escapeHtml(http.error_detail || 'Server error or unroutable resource.')}`;
+    }
+
+    // Latency Box
+    const v4Baseline = diag.ipv4_baseline;
+    const hasV6Ttfb = http && http.ttfb_ms !== undefined && http.ttfb_ms !== null;
+    const v6Ttfb = hasV6Ttfb ? http.ttfb_ms : null;
+    const hasV4Tcp = v4Baseline && v4Baseline.tcp_success !== undefined && v4Baseline.tcp_success !== null;
+    const v4TcpSuccess = hasV4Tcp ? v4Baseline.tcp_success : null;
+    const showLatencyBox = hasV6Ttfb || hasV4Tcp;
 
     drawerContent.innerHTML = `
         <!-- Host Overview -->
@@ -714,10 +787,10 @@ function showDrawerNode(node) {
         <div class="stage-card">
             <div class="stage-top">
                 <span class="stage-title">1. DNS Resolution (AAAA)</span>
-                <span class="stage-tag ${dnsPass ? 'tag-pass' : 'tag-fail'}">${dnsPass ? 'PASS' : (dnsStage.error_code || 'FAIL')}</span>
+                ${dnsTagHtml}
             </div>
             <div class="stage-details">
-                ${dnsPass ? `IPv6: <span style="color:var(--text-primary);">${dnsStage.aaaa_addresses?.[0] || 'Present'}</span>` : `Status: Missing AAAA record in DNS zone.`}
+                ${dnsDetailsHtml}
             </div>
         </div>
 
@@ -725,10 +798,10 @@ function showDrawerNode(node) {
         <div class="stage-card">
             <div class="stage-top">
                 <span class="stage-title">2. Raw TCP SYN (AF_INET6)</span>
-                <span class="stage-tag ${tcpPass ? 'tag-pass' : 'tag-fail'}">${tcpPass ? `${tcpStage.rtt_ms ?? 0}ms` : (tcpStage.error_code || 'TIMEOUT')}</span>
+                ${tcpTagHtml}
             </div>
             <div class="stage-details">
-                ${tcpPass ? `3-Way Handshake established on port 443.` : `Socket connect failed: ${escapeHtml(tcpStage.error_details || 'Connection timeout')}`}
+                ${tcpDetailsHtml}
             </div>
         </div>
 
@@ -736,10 +809,10 @@ function showDrawerNode(node) {
         <div class="stage-card">
             <div class="stage-top">
                 <span class="stage-title">3. TLS Handshake & SNI</span>
-                <span class="stage-tag ${tlsPass ? 'tag-pass' : 'tag-fail'}">${tlsPass ? (tlsStage.alpn_selected || 'TLSv1.3') : 'FAIL'}</span>
+                ${tlsTagHtml}
             </div>
             <div class="stage-details">
-                ${tlsPass ? `Protocol: ${tlsStage.alpn_selected || 'h2'} | Cipher: ${tlsStage.cipher_suite || 'AES-GCM'}` : `SSL verification or handshake failed.`}
+                ${tlsDetailsHtml}
             </div>
         </div>
 
@@ -747,25 +820,31 @@ function showDrawerNode(node) {
         <div class="stage-card">
             <div class="stage-top">
                 <span class="stage-title">4. Strict HTTP/1.1 or H2 GET</span>
-                <span class="stage-tag ${httpPass ? 'tag-pass' : 'tag-fail'}">${httpStage.status_code ? `HTTP ${httpStage.status_code}` : 'FAIL'}</span>
+                ${httpTagHtml}
             </div>
             <div class="stage-details">
-                ${httpPass ? `IPv6 TTFB: <span style="color:var(--text-primary);">${httpStage.ttfb_ms ?? 0}ms</span>` : `Server error or unroutable resource.`}
+                ${httpDetailsHtml}
             </div>
         </div>
 
         <!-- Dual-Path TTFB Comparison -->
-        ${(v4Ttfb > 0 || v6Ttfb > 0) ? `
+        ${showLatencyBox ? `
         <div class="ttfb-box">
             <div style="font-size:0.72rem; font-weight:600; color:var(--color-blue); margin-bottom:6px;">Dual-Path Latency Benchmark</div>
+            ${hasV4Tcp ? `
             <div style="font-size:0.72rem; color:var(--text-secondary); display:flex; justify-content:space-between; margin-bottom:2px;">
-                <span>IPv4 Baseline:</span>
-                <span class="font-mono text-blue">${v4Ttfb}ms</span>
-            </div>
+                <span>IPv4 TCP reachable:</span>
+                <span class="font-mono ${v4TcpSuccess ? 'text-green' : 'text-red'}">${v4TcpSuccess ? 'yes' : 'no'}</span>
+            </div>` : ''}
+            ${hasV6Ttfb ? `
             <div style="font-size:0.72rem; color:var(--text-secondary); display:flex; justify-content:space-between;">
-                <span>Pure IPv6 Path:</span>
-                <span class="font-mono ${v6Ttfb > 0 ? 'text-green' : 'text-red'}">${v6Ttfb > 0 ? `${v6Ttfb}ms` : 'Unreachable'}</span>
-            </div>
+                <span>Pure IPv6 TTFB:</span>
+                <span class="font-mono text-green">${v6Ttfb}ms</span>
+            </div>` : `
+            <div style="font-size:0.72rem; color:var(--text-secondary); display:flex; justify-content:space-between;">
+                <span>Pure IPv6 TTFB:</span>
+                <span class="font-mono text-red">Unreachable</span>
+            </div>`}
         </div>` : ''}
     `;
 }
@@ -865,57 +944,160 @@ async function loadBenchmarkData() {
 }
 
 function renderBenchmarkTab(payload) {
-    const results = payload.results || payload.targets || [];
-    const avgScore = payload.summary?.average_readiness_score_percent ?? 58.4;
+    const sites = Array.isArray(payload.sites) ? payload.sites : [];
+    const metadata = payload.metadata || {};
+    const completedSites = sites.filter(s => s && s.metrics && !s.error);
 
+    // 1. Average Readiness Score
+    const avgScore = metadata.average_readiness_score_percent !== undefined
+        ? `${metadata.average_readiness_score_percent}%`
+        : (completedSites.length > 0
+            ? `${Math.round(completedSites.reduce((acc, s) => acc + (s.metrics.readiness_score_percent || 0), 0) / completedSites.length)}%`
+            : '--%');
     const avgEl = document.getElementById('benchAvgScore');
-    if (avgEl) avgEl.innerText = `${avgScore}%`;
+    if (avgEl) avgEl.innerText = avgScore;
 
+    // 2. Sites Evaluated Count (Real completed count, no default to 30)
+    const totalCount = metadata.total_targets_evaluated !== undefined
+        ? metadata.total_targets_evaluated
+        : completedSites.length;
     const totalEl = document.getElementById('benchTotalSites');
-    if (totalEl) totalEl.innerText = results.length || 30;
+    if (totalEl) totalEl.innerText = totalCount;
 
-    // Render Sector Bar Chart
-    renderSectorBarChart(results);
+    // 3. Leading Sector (from metadata.sector_averages or completed sites)
+    let leadingSector = '--';
+    const sectorAvgs = metadata.sector_averages;
+    if (sectorAvgs && Object.keys(sectorAvgs).length > 0) {
+        let maxAvg = -1;
+        for (const [sec, avg] of Object.entries(sectorAvgs)) {
+            if (avg > maxAvg) {
+                maxAvg = avg;
+                leadingSector = sec;
+            }
+        }
+    } else if (completedSites.length > 0) {
+        const sSums = {};
+        completedSites.forEach(s => {
+            const sec = s.sector || 'General';
+            if (!sSums[sec]) sSums[sec] = { total: 0, count: 0 };
+            sSums[sec].total += (s.metrics.readiness_score_percent || 0);
+            sSums[sec].count += 1;
+        });
+        let maxAvg = -1;
+        for (const [sec, obj] of Object.entries(sSums)) {
+            const avg = obj.total / obj.count;
+            if (avg > maxAvg) {
+                maxAvg = avg;
+                leadingSector = sec;
+            }
+        }
+    }
+    const leadingEl = document.getElementById('benchLeadingSector');
+    if (leadingEl) leadingEl.innerText = leadingSector;
 
-    // Render Protocol Failure Taxonomy
-    renderTaxonomyChart(results);
+    // 4. Primary Bottleneck (highest sum across DNS, TCP, TLS, HTTP)
+    const stageSums = { DNS: 0, TCP: 0, TLS: 0, HTTP: 0 };
+    completedSites.forEach(s => {
+        const sf = s.metrics?.stage_failures || {};
+        for (const stage of ['DNS', 'TCP', 'TLS', 'HTTP']) {
+            stageSums[stage] += (sf[stage] || 0);
+        }
+    });
+    let maxFail = -1;
+    let topStage = 'None';
+    for (const stage of ['DNS', 'TCP', 'TLS', 'HTTP']) {
+        if (stageSums[stage] > maxFail) {
+            maxFail = stageSums[stage];
+            topStage = stage;
+        }
+    }
+    const stageLabels = {
+        DNS: 'DNS Resolution',
+        TCP: 'TCP Transport',
+        TLS: 'TLS Handshake',
+        HTTP: 'HTTP Retrieval',
+        None: 'None'
+    };
+    const bottleneckEl = document.getElementById('benchPrimaryBottleneck');
+    if (bottleneckEl) {
+        bottleneckEl.innerText = maxFail > 0 ? (stageLabels[topStage] || topStage) : 'None';
+    }
 
-    // Populate Benchmark Table
-    renderBenchmarkTable(results);
+    // 5. Dynamic Sector Filter Pills
+    renderSectorFilterPills(sites);
 
-    // Filter pills
-    document.querySelectorAll('#sectorFilterPills .filter-pill').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('#sectorFilterPills .filter-pill').forEach(b => b.classList.remove('active'));
+    // 6. Sector Bar Chart
+    renderSectorBarChart(sites);
+
+    // 7. Protocol Failure Taxonomy
+    renderTaxonomyChart(sites);
+
+    // 8. Benchmark Table
+    renderBenchmarkTable(sites);
+}
+
+function renderSectorFilterPills(sites) {
+    const container = document.getElementById('sectorFilterPills');
+    if (!container) return;
+
+    const distinctSectors = Array.from(
+        new Set((sites || []).map(s => s.sector).filter(Boolean))
+    ).sort();
+
+    let html = `<button class="filter-pill active" data-sector="ALL">All Sectors</button>`;
+    distinctSectors.forEach(sec => {
+        html += `<button class="filter-pill" data-sector="${escapeHtml(sec)}">${escapeHtml(sec)}</button>`;
+    });
+    container.innerHTML = html;
+
+    // Attach click listener once via delegation on container
+    if (!container.dataset.bound) {
+        container.dataset.bound = 'true';
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('.filter-pill');
+            if (!btn) return;
+            container.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const sector = btn.dataset.sector;
             filterBenchmarkTable(sector);
         });
-    });
+    }
 }
 
-function renderSectorBarChart(results) {
+function renderSectorBarChart(sites) {
     const container = document.getElementById('sectorBarChart');
     if (!container) return;
     container.innerHTML = '';
 
+    const completed = (sites || []).filter(s => s && s.metrics && !s.error);
+    if (completed.length === 0) {
+        container.innerHTML = '<div class="font-mono text-muted" style="padding:16px; text-align:center;">No sector evaluation data available.</div>';
+        return;
+    }
+
     // Group scores by sector
     const sectors = {};
-    results.forEach(r => {
+    completed.forEach(r => {
         const sec = r.sector || 'General';
         if (!sectors[sec]) sectors[sec] = { totalScore: 0, count: 0 };
-        sectors[sec].totalScore += (r.metrics?.readiness_score_percent || 0);
+        sectors[sec].totalScore += (r.metrics.readiness_score_percent || 0);
         sectors[sec].count += 1;
     });
 
-    Object.entries(sectors).forEach(([sec, val]) => {
+    const sectorList = Object.entries(sectors).map(([sec, val]) => {
         const avg = Math.round(val.totalScore / Math.max(val.count, 1));
-        const color = avg >= 70 ? 'var(--color-green)' : (avg >= 40 ? 'var(--color-amber)' : 'var(--color-red)');
+        return { sector: sec, avg: avg };
+    });
 
+    // Sort descending by average
+    sectorList.sort((a, b) => b.avg - a.avg);
+
+    sectorList.forEach(({ sector, avg }) => {
+        const color = avg >= 70 ? 'var(--color-green)' : (avg >= 40 ? 'var(--color-amber)' : 'var(--color-red)');
         const row = document.createElement('div');
         row.className = 'sector-row';
         row.innerHTML = `
-            <span class="sector-label" title="${escapeHtml(sec)}">${escapeHtml(sec)}</span>
+            <span class="sector-label" title="${escapeHtml(sector)}">${escapeHtml(sector)}</span>
             <div class="sector-track">
                 <div class="sector-fill" style="width:${avg}%; background-color:${color};"></div>
             </div>
@@ -925,82 +1107,118 @@ function renderSectorBarChart(results) {
     });
 }
 
-function renderTaxonomyChart(results) {
+function renderTaxonomyChart(sites) {
     const container = document.getElementById('failureTaxonomyChart');
     if (!container) return;
 
-    let v4MissingAAAA = 0;
-    let tcpTimeout = 0;
-    let tlsMismatch = 0;
-    let http5xx = 0;
+    const completed = (sites || []).filter(s => s && s.metrics && !s.error);
+    if (completed.length === 0) {
+        container.innerHTML = '<div class="font-mono text-muted" style="padding:16px; text-align:center;">No protocol failure data available.</div>';
+        return;
+    }
 
-    results.forEach(r => {
-        const v4Count = r.metrics?.ipv4_only_count || 0;
-        const brokenCount = r.metrics?.broken_ipv6_count || 0;
-        v4MissingAAAA += v4Count;
-        tcpTimeout += Math.round(brokenCount * 0.6);
-        tlsMismatch += Math.round(brokenCount * 0.25);
-        http5xx += Math.round(brokenCount * 0.15);
+    let dnsFailures = 0;
+    let tcpFailures = 0;
+    let tlsFailures = 0;
+    let httpFailures = 0;
+
+    completed.forEach(r => {
+        const sf = r.metrics?.stage_failures || {};
+        dnsFailures += (sf.DNS || 0);
+        tcpFailures += (sf.TCP || 0);
+        tlsFailures += (sf.TLS || 0);
+        httpFailures += (sf.HTTP || 0);
     });
 
     container.innerHTML = `
         <div class="taxonomy-blocks">
             <div class="taxonomy-card">
-                <div class="tax-title">DNS Missing AAAA</div>
-                <div class="tax-val text-red">${v4MissingAAAA}</div>
-                <div class="tax-note">3rd-Party CDNs, Fonts, Scripts</div>
+                <div class="tax-title">DNS Stage Failures</div>
+                <div class="tax-val text-red">${dnsFailures}</div>
+                <div class="tax-note">Missing AAAA / NXDOMAIN / NODATA</div>
             </div>
             <div class="taxonomy-card">
-                <div class="tax-title">TCP SYN Timeout</div>
-                <div class="tax-val text-amber">${tcpTimeout}</div>
-                <div class="tax-note">IPv6 Blackholing at Edge</div>
+                <div class="tax-title">TCP Stage Failures</div>
+                <div class="tax-val text-amber">${tcpFailures}</div>
+                <div class="tax-note">Handshake Timeout / Refused / No Route</div>
             </div>
             <div class="taxonomy-card">
-                <div class="tax-title">TLS SNI Mismatch</div>
-                <div class="tax-val text-amber">${tlsMismatch}</div>
-                <div class="tax-note">Missing Cert on IPv6 Address</div>
+                <div class="tax-title">TLS Stage Failures</div>
+                <div class="tax-val text-amber">${tlsFailures}</div>
+                <div class="tax-note">Certificate / SNI / Handshake Failures</div>
             </div>
             <div class="taxonomy-card">
-                <div class="tax-title">HTTP 5xx Server Error</div>
-                <div class="tax-val text-red">${http5xx}</div>
-                <div class="tax-note">Origin IPv6 Gateway Failure</div>
+                <div class="tax-title">HTTP Stage Failures</div>
+                <div class="tax-val text-red">${httpFailures}</div>
+                <div class="tax-note">HTTP 5xx Server Errors</div>
             </div>
         </div>
     `;
 }
 
-function renderBenchmarkTable(results) {
+function renderBenchmarkTable(sites) {
     const tbody = document.getElementById('benchmarkTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    results.forEach(r => {
-        const metrics = r.metrics || {};
-        const score = metrics.readiness_score_percent ?? 0;
-        const blast = metrics.blast_radius_percent ?? (100 - score);
-        const apexAaaa = r.apex_diagnostics?.dns_stage?.has_aaaa ?? false;
+    if (!sites || sites.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="table-empty font-mono">No benchmark evaluation results available.</td></tr>`;
+        return;
+    }
 
+    sites.forEach(r => {
         const tr = document.createElement('tr');
         tr.dataset.sector = r.sector || 'General';
-        tr.innerHTML = `
-            <td>
-                <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(r.name || r.id)}</div>
-                <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">${escapeHtml(r.url || '')}</div>
-            </td>
-            <td><span class="badge" style="background-color:var(--bg-muted); color:var(--text-secondary);">${escapeHtml(r.sector || '')}</span></td>
-            <td>${apexAaaa ? '<span class="text-green font-mono">Present</span>' : '<span class="text-red font-mono">Missing</span>'}</td>
-            <td class="font-mono">${metrics.total_resources ?? '--'}</td>
-            <td>
-                <span class="font-mono ${score >= 70 ? 'text-green' : (score >= 40 ? 'text-amber' : 'text-red')}" style="font-weight:600;">
-                    ${score}%
-                </span>
-            </td>
-            <td class="font-mono text-amber">${blast}%</td>
-            <td class="font-mono text-red">${metrics.ipv4_only_count ?? 0}</td>
-            <td>
-                <button class="btn btn-sm btn-secondary" onclick="triggerBenchmarkAudit('${r.url}')">Audit</button>
-            </td>
-        `;
+
+        if (r.error || !r.metrics) {
+            tr.style.opacity = '0.65';
+            tr.innerHTML = `
+                <td>
+                    <div style="font-weight:600; color:var(--text-secondary);">${escapeHtml(r.name || r.id || 'Unknown')}</div>
+                    <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">${escapeHtml(r.url || '')}</div>
+                </td>
+                <td><span class="badge" style="background-color:var(--bg-muted); color:var(--text-secondary);">${escapeHtml(r.sector || '')}</span></td>
+                <td colspan="5" class="font-mono text-red" style="font-size:0.75rem;">Audit Error: ${escapeHtml(r.error || 'Evaluation failed')}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary btn-benchmark-audit" data-url="${escapeHtml(r.url || '')}">Retry</button>
+                </td>
+            `;
+        } else {
+            const metrics = r.metrics || {};
+            const score = metrics.readiness_score_percent ?? 0;
+            const blast = metrics.blast_radius_percent ?? (100 - score);
+            const apexAaaa = r.apex_audit?.has_aaaa ?? false;
+
+            tr.innerHTML = `
+                <td>
+                    <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(r.name || r.id)}</div>
+                    <div style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-muted);">${escapeHtml(r.url || '')}</div>
+                </td>
+                <td><span class="badge" style="background-color:var(--bg-muted); color:var(--text-secondary);">${escapeHtml(r.sector || '')}</span></td>
+                <td>${apexAaaa ? '<span class="text-green font-mono">Present</span>' : '<span class="text-red font-mono">Missing</span>'}</td>
+                <td class="font-mono">${metrics.total_resources ?? '--'}</td>
+                <td>
+                    <span class="font-mono ${score >= 70 ? 'text-green' : (score >= 40 ? 'text-amber' : 'text-red')}" style="font-weight:600;">
+                        ${score}%
+                    </span>
+                </td>
+                <td class="font-mono text-amber">${blast}%</td>
+                <td class="font-mono text-red">${metrics.ipv4_only_count ?? 0}</td>
+                <td>
+                    <button class="btn btn-sm btn-secondary btn-benchmark-audit" data-url="${escapeHtml(r.url || '')}">Audit</button>
+                </td>
+            `;
+        }
+
+        const auditBtn = tr.querySelector('.btn-benchmark-audit');
+        if (auditBtn) {
+            auditBtn.addEventListener('click', () => {
+                const targetUrl = auditBtn.dataset.url;
+                if (targetUrl) {
+                    triggerBenchmarkAudit(targetUrl);
+                }
+            });
+        }
         tbody.appendChild(tr);
     });
 }
@@ -1040,34 +1258,85 @@ async function loadTestbedVerification() {
 }
 
 function renderTestbedTab(data) {
+    const metrics = data.metrics || {};
+    const verified = metrics.detection_rate_verified === true;
+
+    // Status Badge
     const badge = document.getElementById('testbedStatusBadge');
     if (badge) {
-        badge.className = 'status-pill status-ready';
-        badge.innerText = `Verified 100% Precision & Recall (${data.verified_count || 8}/${data.verified_count || 8} Assets)`;
+        badge.className = `status-pill ${verified ? 'status-ready' : 'status-error'}`;
+        if (verified) {
+            badge.innerText = `Verified Ground Truth (100% Precision & Recall)`;
+        } else {
+            badge.innerText = `Unverified: P=${metrics.precision_percent ?? 0}% R=${metrics.recall_percent ?? 0}%`;
+        }
     }
 
+    // Four Metric Cards
+    const precEl = document.getElementById('testbedPrecision');
+    if (precEl) precEl.innerText = metrics.precision_percent !== undefined ? `${metrics.precision_percent}%` : '--';
+
+    const recallEl = document.getElementById('testbedRecall');
+    if (recallEl) recallEl.innerText = metrics.recall_percent !== undefined ? `${metrics.recall_percent}%` : '--';
+
+    const accEl = document.getElementById('testbedAccuracy');
+    if (accEl) accEl.innerText = metrics.overall_accuracy_percent !== undefined ? `${metrics.overall_accuracy_percent}%` : '--';
+
+    const portEl = document.getElementById('testbedPort');
+    if (portEl) portEl.innerText = ':8888';
+
+    // Evaluations Table
     const tbody = document.getElementById('testbedTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const assets = data.assets || [];
-    assets.forEach(a => {
+    const evaluations = data.evaluations || [];
+    if (evaluations.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="table-empty font-mono">No testbed evaluation records available.</td></tr>`;
+        return;
+    }
+
+    evaluations.forEach(e => {
         const tr = document.createElement('tr');
+
+        let resultBadge = '';
+        if (e.evaluation_result === 'CORRECT_DETECTION' || e.evaluation_result === 'CORRECT_COMPLIANT') {
+            resultBadge = `<span class="badge badge-ready font-mono">${escapeHtml(e.evaluation_result)}</span>`;
+        } else if (e.evaluation_result === 'MISSED_DETECTION') {
+            resultBadge = `<span class="badge badge-v4only font-mono">${escapeHtml(e.evaluation_result)}</span>`;
+        } else if (e.evaluation_result === 'FALSE_ALARM') {
+            resultBadge = `<span class="badge badge-broken font-mono">${escapeHtml(e.evaluation_result)}</span>`;
+        } else {
+            resultBadge = `<span class="badge font-mono" style="background-color:var(--bg-muted); color:var(--text-secondary);">${escapeHtml(e.evaluation_result || '--')}</span>`;
+        }
+
         tr.innerHTML = `
-            <td><code class="font-mono text-blue">${escapeHtml(a.path)}</code></td>
-            <td style="color:var(--text-secondary);">${escapeHtml(a.description)}</td>
-            <td><span class="badge" style="background-color:var(--bg-muted); color:var(--text-muted);">${escapeHtml(a.expected_class)}</span></td>
-            <td><span class="badge ${a.detected_status === a.expected_class ? 'badge-ready' : 'badge-v4only'}">${escapeHtml(a.detected_status)}</span></td>
-            <td><code class="font-mono text-amber">${escapeHtml(a.isolated_stage || '--')}</code></td>
-            <td><span class="text-green font-mono" style="font-weight:600;">Verified (100%)</span></td>
+            <td><code class="font-mono text-blue">${escapeHtml(e.url_path)}</code></td>
+            <td style="color:var(--text-secondary);">${escapeHtml(e.description)}</td>
+            <td><span class="badge" style="background-color:var(--bg-muted); color:var(--text-muted);">${escapeHtml(e.expected_status)}</span></td>
+            <td><span class="badge ${e.status_match ? 'badge-ready' : 'badge-v4only'}">${escapeHtml(e.detected_status)}</span></td>
+            <td><code class="font-mono ${e.stage_match ? 'text-green' : 'text-amber'}">${escapeHtml(e.detected_stage || '--')}</code></td>
+            <td>${resultBadge}</td>
         `;
         tbody.appendChild(tr);
     });
+}
 
-    document.getElementById('btnReverifyTestbed')?.addEventListener('click', () => {
-        if (badge) badge.innerText = 'Re-verifying testbed...';
-        loadTestbedVerification();
-    });
+function initTestbedActions() {
+    const btn = document.getElementById('btnReverifyTestbed');
+    if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = 'true';
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            const badge = document.getElementById('testbedStatusBadge');
+            if (badge) badge.innerText = 'Re-verifying testbed...';
+            try {
+                await loadTestbedVerification();
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
 }
 
 // ==========================================
@@ -1080,31 +1349,84 @@ async function loadTelemetryContext() {
         if (!resp.ok) return;
         const data = await resp.json();
 
+        const pub = data.public_telemetry || {};
+        const local = data.local_interfaces || {};
+        const dns = data.dns_telemetry || {};
+
         // Update nav snippet
         const snippet = document.getElementById('navTelemetrySnippet');
-        if (snippet && data.asn) {
-            snippet.innerText = `Telemetry: ${data.asn} / ${data.isp || 'Dual-Stack'}`;
+        if (snippet) {
+            const v6Status = data.has_native_ipv6 ? 'Native IPv6' : 'IPv4 only';
+            const asnPart = pub.asn ? `${pub.asn} / ${v6Status}` : v6Status;
+            snippet.innerText = `Telemetry: ${asnPart}`;
         }
 
         // Populate Telemetry Box
         const box = document.getElementById('telemetryBox');
         if (box) {
+            // ASN and organization
+            let asnDisplay = 'Unavailable';
+            if (pub.asn && pub.as_org) {
+                asnDisplay = `${pub.asn} (${pub.as_org})`;
+            } else if (pub.asn) {
+                asnDisplay = pub.asn;
+            } else if (pub.as_org) {
+                asnDisplay = pub.as_org;
+            }
+
+            // Location
+            let locDisplay = 'Unavailable';
+            if (pub.city && pub.country) {
+                locDisplay = `${pub.city}, ${pub.country}`;
+            } else if (pub.country) {
+                locDisplay = pub.country;
+            } else if (pub.city) {
+                locDisplay = pub.city;
+            }
+
+            // Local IPv4
+            const v4Display = local.ipv4 || 'Unavailable';
+
+            // Local IPv6
+            const v6Display = local.ipv6 || 'Unavailable';
+
+            // DNS Resolver & latency
+            let dnsDisplay = 'Unavailable';
+            if (dns.primary_resolver) {
+                if (dns.resolver_latency_ms !== null && dns.resolver_latency_ms !== undefined) {
+                    dnsDisplay = `${dns.primary_resolver} (RTT: ${dns.resolver_latency_ms}ms)`;
+                } else {
+                    dnsDisplay = dns.primary_resolver;
+                }
+            }
+
+            // Native IPv6 status
+            const nativeV6Display = data.has_native_ipv6 ? 'Active (Native IPv6)' : 'Inactive (IPv4 Only)';
+
             box.innerHTML = `
                 <div class="telemetry-card font-mono">
                     <span class="t-label">Autonomous System (ASN)</span>
-                    <span class="t-value">${data.asn || 'AS45609'} (${data.isp || 'Bharti Airtel Ltd'})</span>
+                    <span class="t-value">${escapeHtml(asnDisplay)}</span>
+                </div>
+                <div class="telemetry-card font-mono">
+                    <span class="t-label">Public Geolocation</span>
+                    <span class="t-value">${escapeHtml(locDisplay)}</span>
                 </div>
                 <div class="telemetry-card font-mono">
                     <span class="t-label">Local IPv4 Gateway</span>
-                    <span class="t-value">${data.local_ipv4 || '127.0.0.1'}</span>
+                    <span class="t-value">${escapeHtml(v4Display)}</span>
                 </div>
                 <div class="telemetry-card font-mono">
                     <span class="t-label">Local IPv6 Address</span>
-                    <span class="t-value text-green">${data.local_ipv6 || '2401:4900:...'}</span>
+                    <span class="t-value ${local.ipv6 ? 'text-green' : ''}">${escapeHtml(v6Display)}</span>
                 </div>
                 <div class="telemetry-card font-mono">
                     <span class="t-label">DNS Resolver</span>
-                    <span class="t-value">${data.resolver_ip || '8.8.8.8'} (RTT: ${data.resolver_rtt_ms || '0.24'}ms)</span>
+                    <span class="t-value">${escapeHtml(dnsDisplay)}</span>
+                </div>
+                <div class="telemetry-card font-mono">
+                    <span class="t-label">Native IPv6 Stack</span>
+                    <span class="t-value ${data.has_native_ipv6 ? 'text-green' : 'text-amber'}">${escapeHtml(nativeV6Display)}</span>
                 </div>
                 <div class="telemetry-card font-mono">
                     <span class="t-label">Measurement Engine</span>

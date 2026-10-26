@@ -44,7 +44,7 @@
 
         <div class="nav-status">
             <span class="status-indicator"></span>
-            <span id="navTelemetrySnippet" class="font-mono">Telemetry: AS45609 / Dual-Stack</span>
+            <span id="navTelemetrySnippet" class="font-mono">Telemetry: loading...</span>
         </div>
     </header>
 
@@ -243,17 +243,17 @@
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Sites Evaluated</div>
-                        <div id="benchTotalSites" class="metric-value font-mono text-blue">30</div>
+                        <div id="benchTotalSites" class="metric-value font-mono text-blue">--</div>
                         <div class="metric-sub">Indian Digital Ecosystem</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Leading Sector</div>
-                        <div id="benchLeadingSector" class="metric-value font-mono text-green">Tech / SaaS</div>
+                        <div id="benchLeadingSector" class="metric-value font-mono text-green">--</div>
                         <div class="metric-sub">Highest IPv6 Sub-resource Adoption</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Primary Bottleneck</div>
-                        <div class="metric-value font-mono text-red" style="font-size:1.15rem;">3rd-Party CDNs</div>
+                        <div id="benchPrimaryBottleneck" class="metric-value font-mono text-red" style="font-size:1.15rem;">--</div>
                         <div class="metric-sub">Missing DNS AAAA on External Assets</div>
                     </div>
                 </div>
@@ -282,15 +282,7 @@
             <div class="panel-box table-panel">
                 <div class="table-bar">
                     <span class="table-heading">National Target Registry & Evaluation Results</span>
-                    <div class="sector-pills" id="sectorFilterPills">
-                        <button class="filter-pill active" data-sector="ALL">All Sectors</button>
-                        <button class="filter-pill" data-sector="Government">Government</button>
-                        <button class="filter-pill" data-sector="Banking & Finance">Banking</button>
-                        <button class="filter-pill" data-sector="Healthcare">Healthcare</button>
-                        <button class="filter-pill" data-sector="Tech & SaaS">Tech & SaaS</button>
-                        <button class="filter-pill" data-sector="Education">Education</button>
-                        <button class="filter-pill" data-sector="E-Commerce">E-Commerce</button>
-                    </div>
+                    <div class="sector-pills" id="sectorFilterPills"></div>
                 </div>
                 <div class="table-wrapper">
                     <table class="clean-table">
@@ -330,22 +322,22 @@
                 <div class="metrics-row" style="margin-top:16px; margin-bottom:0;">
                     <div class="metric-card">
                         <div class="metric-label">Detection Precision</div>
-                        <div class="metric-value font-mono text-green">100.0%</div>
+                        <div id="testbedPrecision" class="metric-value font-mono text-green">--</div>
                         <div class="metric-sub">Zero False Positives</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Detection Recall</div>
-                        <div class="metric-value font-mono text-green">100.0%</div>
+                        <div id="testbedRecall" class="metric-value font-mono text-green">--</div>
                         <div class="metric-sub">All Seeded Failures Flagged</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Stage Isolation Accuracy</div>
-                        <div class="metric-value font-mono text-green">100.0%</div>
+                        <div id="testbedAccuracy" class="metric-value font-mono text-green">--</div>
                         <div class="metric-sub">Exact Protocol Layer Identified</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-label">Local Testbed Port</div>
-                        <div class="metric-value font-mono text-blue">:8888</div>
+                        <div id="testbedPort" class="metric-value font-mono text-blue">:8888</div>
                         <div class="metric-sub">Serving Testbed Harness</div>
                     </div>
                 </div>

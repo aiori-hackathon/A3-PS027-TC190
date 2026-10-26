@@ -1,0 +1,14 @@
+.venv
+venv
+__pycache__
+*.pyc
+.git
+.gitignore
+.DS_Store
+.pytest_cache
+reports/
+extension/
+extension.zip
+package_extension.sh
+tests/
+.env
