@@ -11,6 +11,8 @@
  */
 
 const LOCAL_API_BASE = 'http://localhost:8000';
+const CLOUD_API_BASE = 'https://a3-ps027-tc190.onrender.com';
+let ACTIVE_API_BASE = LOCAL_API_BASE;
 
 // Global State
 let activeTabInfo = null;
@@ -155,19 +157,37 @@ async function checkDaemonHealth() {
     const pill = document.getElementById('daemonStatusPill');
     const text = document.getElementById('daemonStatusText');
 
+    // 1. Try local daemon first
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1800);
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
         const res = await fetch(`${LOCAL_API_BASE}/api/telemetry`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         if (res.ok) {
+            ACTIVE_API_BASE = LOCAL_API_BASE;
             if (pill) pill.className = 'daemon-pill';
-            if (text) text.innerText = 'Live :8000';
+            if (text) text.innerText = 'Local :8000';
             return true;
         }
     } catch {}
 
+    // 2. Fall back to deployed Cloud backend on Render
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`${CLOUD_API_BASE}/api/telemetry`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+            ACTIVE_API_BASE = CLOUD_API_BASE;
+            if (pill) pill.className = 'daemon-pill';
+            if (text) text.innerText = 'Cloud (Render)';
+            return true;
+        }
+    } catch {}
+
+    ACTIVE_API_BASE = LOCAL_API_BASE;
     if (pill) pill.className = 'daemon-pill daemon-connecting';
     if (text) text.innerText = 'Offline (Simulated)';
     return false;
@@ -297,10 +317,10 @@ function initControls() {
 
     // Benchmark export actions
     document.getElementById('btnExportCsv')?.addEventListener('click', () => {
-        window.open(`${LOCAL_API_BASE}/api/reports/csv`, '_blank');
+        window.open(`${ACTIVE_API_BASE}/api/reports/csv`, '_blank');
     });
     document.getElementById('btnExportJson')?.addEventListener('click', () => {
-        window.open(`${LOCAL_API_BASE}/api/reports/json`, '_blank');
+        window.open(`${ACTIVE_API_BASE}/api/reports/json`, '_blank');
     });
 
     // Testbed run suite
@@ -366,7 +386,7 @@ async function runAudit(targetUrl) {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 60000);
-            const res = await fetch(`${LOCAL_API_BASE}/api/audit`, {
+            const res = await fetch(`${ACTIVE_API_BASE}/api/audit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: targetUrl }),
@@ -1108,7 +1128,7 @@ async function loadBenchmarkData() {
     }
 
     try {
-        const res = await fetch(`${LOCAL_API_BASE}/api/benchmark`);
+        const res = await fetch(`${ACTIVE_API_BASE}/api/benchmark`);
         if (res.ok) {
             const data = await res.json();
             benchmarkDataCache = data;
@@ -1206,7 +1226,7 @@ async function loadTestbedData(runLive = false) {
     }
 
     try {
-        const res = await fetch(`${LOCAL_API_BASE}/api/testbed`);
+        const res = await fetch(`${ACTIVE_API_BASE}/api/testbed`);
         if (res.ok) {
             const report = await res.json();
             renderTestbedReport(report);
@@ -1258,7 +1278,7 @@ async function loadTelemetryData() {
     const heDelta = document.getElementById('telemetryHeDelta');
 
     try {
-        const res = await fetch(`${LOCAL_API_BASE}/api/telemetry`);
+        const res = await fetch(`${ACTIVE_API_BASE}/api/telemetry`);
         if (res.ok) {
             const data = await res.json();
             if (clientV6) clientV6.innerText = data.client_ipv6 || '2405:201:...::1';

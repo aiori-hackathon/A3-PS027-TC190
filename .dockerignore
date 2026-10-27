@@ -6,7 +6,6 @@ __pycache__
 .gitignore
 .DS_Store
 .pytest_cache
-reports/
 extension/
 extension.zip
 package_extension.sh
