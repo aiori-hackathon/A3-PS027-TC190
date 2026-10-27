@@ -7,6 +7,14 @@
 
 ---
 
+## 🌐 Live Deployed Dashboard & Chrome Extension
+
+* 🚀 **Live Production Dashboard**: [https://a3-ps027-tc190.onrender.com](https://a3-ps027-tc190.onrender.com)
+* 📖 **OpenAPI Documentation / Swagger**: [https://a3-ps027-tc190.onrender.com/docs](https://a3-ps027-tc190.onrender.com/docs)
+* 🧩 **Chrome Extension (Manifest V3 Side Panel)**: [`extension.zip`](./extension.zip) — [Installation & Web Store Guide](./CHROMEWEBSTORE.md) | [Privacy Policy](./PRIVACY.md)
+
+---
+
 ## 🎥 Team Introduction & Orientation Video (Step 6 & Step 7)
 
 As required by **Step 6 and Step 7** of the AIORI 3.0 Hackathon Guidelines, watch our team introduction video presenting our understanding of Problem Statement PS-027, assigned roles, and our proposed multi-stage auditing architecture:
@@ -117,6 +125,9 @@ Validates the 4-stage protocol engine (DNS, TCP, TLS, HTTP) and asserts **100% p
 
 ## 🧑‍🏫 Mentor Demonstration & Deliverables
 
+* **Live Deployed Cloud Platform**: [https://a3-ps027-tc190.onrender.com](https://a3-ps027-tc190.onrender.com)
+* **Chrome Extension Package**: [`extension.zip`](./extension.zip) ([Web Store Guide](./CHROMEWEBSTORE.md))
+* **OpenAPI Live Interactive Swagger**: [https://a3-ps027-tc190.onrender.com/docs](https://a3-ps027-tc190.onrender.com/docs)
 * **Pseudocode & Demonstration Snippet**: [`docs/pseudocode_snippet.md`](./docs/pseudocode_snippet.md)
 * **Controlled Ground-Truth Report**: [`reports/controlled_site_report.json`](./reports/controlled_site_report.json)
 * **National Benchmark Dataset**:
