@@ -57,3 +57,4 @@ def start_keepalive(interval_seconds: int = 600):
 
     thread = threading.Thread(target=_loop, daemon=True, name="RenderKeepAliveWorker")
     thread.start()
+
