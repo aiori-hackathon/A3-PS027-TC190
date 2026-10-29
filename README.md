@@ -60,13 +60,16 @@ An apex domain resolving to an `AAAA` record does not make a website truly IPv6-
 
 1. **Happy-Eyeballs Decoupled Dual-Path Probing**: Independent, forced pure IPv6 (`AF_INET6`) and pure IPv4 socket probes to eliminate browser fallback bias and deliver ground-truth diagnostics.
 2. **4-Stage Protocol Failure Isolation**: Sequentially isolates failure layers across:
-   - **Stage 1 (DNS)**: `A` and `AAAA` queries, NODATA, CNAME chains, NXDOMAIN, SERVFAIL.
+   - **Stage 1 (DNS)**: `A` and `AAAA` queries, Authoritative Nameserver (NS) parity per **RFC 3901**, NODATA, CNAME chains, NXDOMAIN, SERVFAIL.
    - **Stage 2 (TCP)**: OS socket handshake (port 80/443); captures Timeout, Connection Refused, No Route.
-   - **Stage 3 (TLS)**: SSL handshake with SNI; detects expired certs, untrusted CAs, and hostname mismatches.
-   - **Stage 4 (HTTP)**: Strict IPv6 HTTP/1.1 & HTTP/2 retrieval; measures TTFB and flags HTTP 4xx/5xx status codes.
-3. **Causal Dependency Graph & Criticality Scoring**: Distinguishes render-blocking core assets (CSS/JS) from optional telemetry pixels to calculate real-world blast radius impact.
-4. **Controlled Testbed Validation**: Embedded test server seeded with deliberate IPv4-only and broken IPv6 assets, mathematically verifying **100% precision and 100% recall**.
-5. **30-Site National Empirical Dataset**: Structured evaluation across Indian public services, e-commerce, news, higher education, SaaS, and banking infrastructure.
+   - **Stage 3 (TLS)**: SSL handshake with SNI per **RFC 8446**; detects expired certs, untrusted CAs, ALPN negotiation, and hostname mismatches.
+   - **Stage 4 (HTTP)**: Strict IPv6 HTTP/1.1 & HTTP/2 retrieval per **RFC 9113**; measures pure IPv6 TTFB and flags HTTP 4xx/5xx status codes.
+3. **Hardcoded IPv4 Literal Detection (RFC 6052)**: Automatically scans and flags hardcoded IPv4 address literals in URLs that bypass DNS resolution and break in IPv6-only/NAT64 networks.
+4. **Actionable CLI Probing & RFC Guidance**: Contextual copy-paste terminal commands (`dig AAAA`, `curl -6`, `openssl s_client`) and IETF RFC hyperlinks embedded into every node drawer for immediate operator remediation.
+5. **Causal Dependency Graph & Criticality Scoring**: Distinguishes render-blocking core assets (CSS/JS) from optional telemetry pixels to calculate real-world blast radius impact.
+6. **Controlled Testbed Validation**: Embedded test server seeded with deliberate IPv4-only and broken IPv6 assets, mathematically verifying **100% precision and 100% recall**.
+7. **30-Site National Empirical Dataset**: Structured evaluation across Indian public services, e-commerce, news, higher education, SaaS, and banking infrastructure.
+8. **Always-On Cloud Keep-Alive Daemon**: Built-in background health pinger keeps the Render cloud container awake 24/7 without cold-start delay during live mentor evaluations.
 
 ---
 

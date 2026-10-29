@@ -663,6 +663,8 @@ function buildGraphData(auditReport) {
     const apexHost = auditReport.target_domain || 'apex.domain';
     const apexV6 = apexDiag.is_ipv6_ready ?? false;
 
+    const apexIsLit = apexDiag.is_ipv4_literal || /^(\d{1,3}\.){3}\d{1,3}$/.test(apexHost);
+
     // Apex Node
     const apexNode = {
         id: 'apex',
@@ -671,6 +673,7 @@ function buildGraphData(auditReport) {
         type: 'apex',
         isV6: apexV6,
         isBroken: apexDiag.overall_status === 'BROKEN_ROUTE',
+        is_ipv4_literal: apexIsLit,
         ip: apexDiag.dns?.aaaa_records?.[0] || apexDiag.dns?.a_records?.[0] || 'Unknown',
         diagnostics: apexDiag,
         x: 0,
@@ -690,6 +693,7 @@ function buildGraphData(auditReport) {
         const isV6 = diag.is_ipv6_ready ?? (dep.is_ipv6_ready ?? false);
         const isBroken = diag.overall_status === 'BROKEN_ROUTE' || dep.protocol_status === 'TCP_TIMEOUT';
         const isV4Only = !isV6 && !isBroken;
+        const isIpv4Lit = dep.is_ipv4_literal || /^(\d{1,3}\.){3}\d{1,3}$/.test(dep.domain || '');
 
         const angle = (idx / Math.max(1, count)) * 2 * Math.PI;
         const x = Math.cos(angle) * radius;
@@ -707,6 +711,7 @@ function buildGraphData(auditReport) {
             isV6,
             isBroken,
             isV4Only,
+            is_ipv4_literal: isIpv4Lit,
             ip: diag.dns?.aaaa_records?.[0] || diag.dns?.a_records?.[0] || dep.remote_ip || 'Cached',
             diagnostics: diag,
             x,
@@ -891,6 +896,10 @@ function selectNode(node) {
     }
 
     const diag = node.diagnostics || {};
+    const host = node.label || 'example.com';
+    const firstAaaa = diag.dns?.aaaa_records?.[0] || '';
+    const connectHost = firstAaaa ? `[${firstAaaa}]` : host;
+    const isIpv4Lit = node.is_ipv4_literal || /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
 
     // 1. DNS Resolution
     const hasAaaa = diag.dns?.aaaa_records && diag.dns.aaaa_records.length > 0;
@@ -898,7 +907,13 @@ function selectNode(node) {
     setText('diagDnsAaaa', hasAaaa ? diag.dns.aaaa_records[0] : 'None (No AAAA)');
     setText('diagDnsA', diag.dns?.a_records?.[0] || 'None');
     setText('diagDnsRtt', diag.dns?.rtt_ms ? `${diag.dns.rtt_ms.toFixed(1)} ms` : '-- ms');
-    setText('diagDnsNs', diag.dns?.nameserver || '8.8.8.8');
+
+    if (diag.dns?.ns_audit) {
+        const ns = diag.dns.ns_audit;
+        setText('diagDnsNs', `${ns.ipv6_nameservers || 0}/${ns.total_nameservers || 0} v6 (${ns.rfc3901_compliant ? 'RFC 3901 OK' : 'Non-compliant'})`);
+    } else {
+        setText('diagDnsNs', diag.dns?.nameserver || '8.8.8.8');
+    }
 
     // 2. TCP Handshake
     const tcpPass = diag.tcp?.status === 'TCP_SUCCESS';
@@ -926,13 +941,21 @@ function selectNode(node) {
     const codeEl = document.getElementById('remediationCode');
     const textEl = document.getElementById('remediationText');
 
-    if (!hasAaaa) {
+    if (isIpv4Lit) {
+        if (codeEl) {
+            codeEl.innerText = 'FAILURE: IPV4_LITERAL';
+            codeEl.className = 'step-badge badge-fail font-mono';
+        }
+        if (textEl) {
+            textEl.innerHTML = `Host is a hardcoded IPv4 literal (<code>${escapeHtml(host)}</code>) violating <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc6052" target="_blank" rel="noreferrer">RFC 6052</a>.<br><strong>Remediation:</strong><br>1. Replace direct IP addresses with fully qualified domain names (FQDNs).<br>2. Ensure FQDN resolves dual-stack AAAA/A records.`;
+        }
+    } else if (!hasAaaa) {
         if (codeEl) {
             codeEl.innerText = 'FAILURE: MISSING_AAAA';
             codeEl.className = 'step-badge badge-fail font-mono';
         }
         if (textEl) {
-            textEl.innerHTML = `Host [${node.label}] does not advertise an IPv6 AAAA record in DNS.<br><strong>Remediation:</strong><br>1. Assign an IPv6 /64 prefix to the web origin or CDN distribution.<br>2. Add an AAAA DNS record per <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc4038" target="_blank" rel="noreferrer">RFC 4038 (IPv6 Transition)</a>.`;
+            textEl.innerHTML = `Host [${escapeHtml(node.label)}] does not advertise an IPv6 AAAA record in DNS.<br><strong>Remediation:</strong><br>1. Assign an IPv6 /64 prefix to the web origin or CDN distribution.<br>2. Add an AAAA DNS record per <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc4038" target="_blank" rel="noreferrer">RFC 4038 (IPv6 Transition)</a>.<br>3. Verify Authoritative Nameservers support IPv6 per <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc3901" target="_blank" rel="noreferrer">RFC 3901</a>.`;
         }
     } else if (!tcpPass) {
         if (codeEl) {
@@ -950,8 +973,46 @@ function selectNode(node) {
             codeEl.className = 'step-badge badge-pass font-mono';
         }
         if (textEl) {
-            textEl.innerHTML = `Host [${node.label}] successfully passed DNS, TCP, TLS, and HTTP stages over pure IPv6. Zero legacy IPv4 translation or NAT64 fallback required.`;
+            textEl.innerHTML = `Host [${escapeHtml(node.label)}] successfully passed DNS, TCP, TLS, and HTTP stages over pure IPv6. Zero legacy IPv4 translation or NAT64 fallback required.`;
         }
+    }
+
+    // Actionable CLI Verification Snippet
+    let cliLabel = '';
+    let cliCmd = '';
+    if (isIpv4Lit) {
+        cliLabel = 'CLI: RFC 6052 NAT64 Translation Probe';
+        cliCmd = `curl -6 --connect-timeout 4 -I -v http://${host}`;
+    } else if (!hasAaaa) {
+        cliLabel = 'CLI: DNS AAAA & DNSSEC Audit';
+        cliCmd = `dig AAAA ${host} +dnssec +trace`;
+    } else if (!tcpPass) {
+        cliLabel = 'CLI: Raw IPv6 TCP Socket Handshake';
+        cliCmd = `curl -6 --connect-timeout 4 -I -v https://${host}`;
+    } else if (!tlsPass) {
+        cliLabel = 'CLI: IPv6 TLS Certificate & SNI Handshake';
+        cliCmd = `openssl s_client -6 -connect ${connectHost}:443 -servername ${host}`;
+    } else {
+        cliLabel = 'CLI: Strict IPv6 HTTP TTFB Benchmark';
+        cliCmd = `curl -6 -s -o /dev/null -w "HTTP: %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s\\n" https://${host}`;
+    }
+
+    const cliHeaderEl = document.getElementById('cliCmdHeader');
+    if (cliHeaderEl) cliHeaderEl.innerText = cliLabel;
+    const cliCodeEl = document.getElementById('cliProbeCode');
+    if (cliCodeEl) cliCodeEl.innerText = cliCmd;
+    const btnCopy = document.getElementById('btnCopyCliProbe');
+    if (btnCopy) {
+        btnCopy.onclick = () => {
+            navigator.clipboard.writeText(cliCmd).then(() => {
+                const orig = btnCopy.innerText;
+                btnCopy.innerText = 'Copied!';
+                setTimeout(() => { btnCopy.innerText = orig; }, 1500);
+            }).catch(() => {
+                btnCopy.innerText = 'Copied!';
+                setTimeout(() => { btnCopy.innerText = 'Copy'; }, 1500);
+            });
+        };
     }
 }
 
@@ -1070,6 +1131,10 @@ function renderDependenciesTable(data) {
         const isBroken = diag.overall_status === 'BROKEN_ROUTE' || dep.protocol_status === 'TCP_TIMEOUT';
         const remoteIp = diag.dns?.aaaa_records?.[0] || diag.dns?.a_records?.[0] || dep.remote_ip || 'Cached';
 
+        const isIpv4Lit = dep.is_ipv4_literal || /^(\d{1,3}\.){3}\d{1,3}$/.test(dep.domain || '');
+        const badgeLabel = isV6 ? 'IPv6' : (isBroken ? 'Broken' : (isIpv4Lit ? 'IPv4 Lit' : 'IPv4'));
+        const badgeClass = isV6 ? 'badge-pass' : (isBroken ? 'badge-skip' : 'badge-fail');
+
         const tr = document.createElement('tr');
         tr.dataset.domain = (dep.domain || '').toLowerCase();
         tr.style.cursor = 'pointer';
@@ -1077,7 +1142,7 @@ function renderDependenciesTable(data) {
         tr.innerHTML = `
             <td style="font-weight:500;">${escapeHtml(dep.domain)}</td>
             <td style="color:var(--text-muted);">${escapeHtml(dep.resource_type || 'script')}</td>
-            <td><span class="step-badge ${isV6 ? 'badge-pass' : (isBroken ? 'badge-skip' : 'badge-fail')}">${isV6 ? 'IPv6' : (isBroken ? 'Broken' : 'IPv4')}</span></td>
+            <td><span class="step-badge ${badgeClass}">${badgeLabel}</span></td>
             <td class="text-right font-mono" style="color:var(--text-dim);">${escapeHtml(truncateString(remoteIp, 18))}</td>
         `;
 

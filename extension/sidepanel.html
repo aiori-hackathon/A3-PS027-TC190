@@ -247,7 +247,7 @@
                             <div class="step-body">
                                 <div class="step-summary-bar" role="button" tabindex="0" aria-expanded="false" data-step="stepDns">
                                     <div class="step-title-group">
-                                        <span class="step-name">DNS Resolution</span>
+                                        <span class="step-name">DNS Resolution <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc3596" target="_blank" rel="noreferrer">RFC 3596</a> <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc3901" target="_blank" rel="noreferrer">RFC 3901</a></span>
                                         <span id="stageBadgeDns" class="step-badge badge-pass font-mono">PASS</span>
                                     </div>
                                     <svg class="disclosure-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -271,7 +271,7 @@
                             <div class="step-body">
                                 <div class="step-summary-bar" role="button" tabindex="0" aria-expanded="false" data-step="stepTcp">
                                     <div class="step-title-group">
-                                        <span class="step-name">TCP SYN / ACK Handshake</span>
+                                        <span class="step-name">TCP SYN / ACK <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc8200" target="_blank" rel="noreferrer">RFC 8200</a> <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc8305" target="_blank" rel="noreferrer">RFC 8305</a></span>
                                         <span id="stageBadgeTcp" class="step-badge badge-pass font-mono">PASS</span>
                                     </div>
                                     <svg class="disclosure-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -295,7 +295,7 @@
                             <div class="step-body">
                                 <div class="step-summary-bar" role="button" tabindex="0" aria-expanded="false" data-step="stepTls">
                                     <div class="step-title-group">
-                                        <span class="step-name">TLS Handshake & ALPN</span>
+                                        <span class="step-name">TLS Handshake & ALPN <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc8446" target="_blank" rel="noreferrer">RFC 8446</a> <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc6066" target="_blank" rel="noreferrer">RFC 6066</a></span>
                                         <span id="stageBadgeTls" class="step-badge badge-pass font-mono">PASS</span>
                                     </div>
                                     <svg class="disclosure-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -319,7 +319,7 @@
                             <div class="step-body">
                                 <div class="step-summary-bar" role="button" tabindex="0" aria-expanded="false" data-step="stepHttp">
                                     <div class="step-title-group">
-                                        <span class="step-name">HTTP GET Application Payload</span>
+                                        <span class="step-name">HTTP Payload <a class="rfc-link" href="https://datatracker.ietf.org/doc/html/rfc9113" target="_blank" rel="noreferrer">RFC 9113</a></span>
                                         <span id="stageBadgeHttp" class="step-badge badge-pass font-mono">200 OK</span>
                                     </div>
                                     <svg class="disclosure-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -352,6 +352,18 @@
                         </div>
                         <div id="remediationText" class="fix-content font-mono">
                             Host is fully reachable over native IPv6 across DNS, TCP, TLS, and HTTP.
+                        </div>
+
+                        <!-- Actionable CLI Verification Snippet -->
+                        <div class="cli-cmd-card" id="sidepanelCliCard" style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border-default);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="font-size:11px; font-weight:600; color:var(--state-info);" id="cliCmdHeader">CLI Verification Probe</span>
+                                <button type="button" class="btn-ghost-sm font-mono" id="btnCopyCliProbe" style="font-size:11px; padding:2px 8px; border:1px solid var(--border-default); border-radius:4px; cursor:pointer;">Copy</button>
+                            </div>
+                            <pre class="font-mono" style="font-size:11px; background:#0d1117; border:1px solid var(--border-default); border-radius:4px; padding:6px 8px; color:#79c0ff; white-space:pre-wrap; word-break:break-all;"><code id="cliProbeCode">dig AAAA ...</code></pre>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+                                Run in bash/zsh to isolate socket handshake and bypass Happy Eyeballs fallback.
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -8,6 +8,7 @@ import csv
 import json
 import time
 import logging
+import re
 from typing import Dict, Any, List, Optional
 
 from .targets import BENCHMARK_TARGETS
@@ -40,8 +41,9 @@ class BenchmarkRunner:
         crawl_data = self.crawler.crawl(url)
         graph_data = DependencyGraphBuilder.build_graph(crawl_data)
 
-        # 2. Audit Apex Domain
+        # 2. Audit Apex Domain and Authoritative Nameservers (RFC 3901)
         apex_audit = self.pipeline.audit_resource(url)
+        ns_audit = self.pipeline.dns_stage.diagnose_nameservers(crawl_data["apex_domain"])
 
         # 3. Audit all unique hosts discovered in runtime DOM
         host_audits: Dict[str, Any] = {}
@@ -66,12 +68,20 @@ class BenchmarkRunner:
         total_weight = 0.0
         failed_weight = 0.0
 
+        ipv4_regex = re.compile(r"^(\d{1,3}\.){3}\d{1,3}$")
+        detected_ipv4_literals: List[str] = []
+
         detailed_resources = []
         for req in resources:
             h = req["domain"]
             res_type = req.get("resource_type") or "other"
             weight = RESOURCE_CRITICALITY_WEIGHTS.get(res_type, 0.2)
             total_weight += weight
+
+            # Check for hardcoded IPv4 address literals (RFC 6052 breakage)
+            is_literal = bool(ipv4_regex.match(h))
+            if is_literal and h not in detected_ipv4_literals:
+                detected_ipv4_literals.append(h)
 
             diag = host_audits.get(h, {})
             is_ready = diag.get("is_ipv6_ready", False)
@@ -128,7 +138,8 @@ class BenchmarkRunner:
                 "has_aaaa": apex_audit.get("stages", {}).get("dns", {}).get("has_aaaa", False),
                 "is_ipv6_ready": apex_is_ready,
                 "status": apex_audit.get("overall_status"),
-                "failed_stage": apex_audit.get("failed_at_stage")
+                "failed_stage": apex_audit.get("failed_at_stage"),
+                "ns_audit": ns_audit
             },
             "metrics": {
                 "total_resources": total_resources,
@@ -142,6 +153,10 @@ class BenchmarkRunner:
                 "subresource_readiness_percent": subresource_score,
                 "blast_radius_percent": blast_radius_score,
                 "stage_failures": stage_failures,
+                "ns_audit": ns_audit,
+                "rfc3901_compliant": ns_audit.get("rfc3901_compliant", False),
+                "ipv4_literals_count": len(detected_ipv4_literals),
+                "ipv4_literals": detected_ipv4_literals,
                 "methodology_reference": "SAP Webres6 (Extended with DAG & 4-Stage OSI Isolation)"
             },
             "total_audit_time_ms": total_site_time_ms,

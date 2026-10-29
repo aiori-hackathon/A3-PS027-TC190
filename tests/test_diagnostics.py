@@ -57,3 +57,13 @@ def test_pipeline_ipv4_only_site():
     assert res["overall_status"] == "IPV4_ONLY_DEPENDENCY"
     assert res["is_ipv6_ready"] is False
     assert res["failed_at_stage"] == "DNS"
+
+def test_dns_nameservers_rfc3901():
+    """Verify RFC 3901 authoritative nameserver audit."""
+    dns_diag = DNSDiagnostic()
+    ns_res = dns_diag.diagnose_nameservers("google.com")
+    assert ns_res["total_nameservers"] > 0
+    assert "nameservers" in ns_res
+    assert ns_res["has_ipv6_ns"] is True
+    assert ns_res["rfc3901_compliant"] is True
+

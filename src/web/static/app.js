@@ -211,6 +211,25 @@ function renderAuditResults(data) {
     if (metricV4Only) metricV4Only.innerText = metrics.ipv4_only_count ?? 0;
     if (metricBroken) metricBroken.innerText = metrics.broken_ipv6_count ?? 0;
 
+    const metricNsAudit = document.getElementById('metricNsAudit');
+    if (metricNsAudit) {
+        const ns = metrics.ns_audit;
+        if (ns && ns.total_nameservers > 0) {
+            metricNsAudit.innerText = `${ns.ipv6_nameservers_count}/${ns.total_nameservers}`;
+            metricNsAudit.className = `metric-value font-mono ${ns.rfc3901_compliant ? 'text-green' : (ns.ipv6_nameservers_count > 0 ? 'text-amber' : 'text-red')}`;
+        } else {
+            metricNsAudit.innerText = '--';
+            metricNsAudit.className = 'metric-value font-mono text-blue';
+        }
+    }
+
+    const metricIpv4Lit = document.getElementById('metricIpv4Lit');
+    if (metricIpv4Lit) {
+        const v4Lits = metrics.ipv4_literals_count || 0;
+        metricIpv4Lit.innerText = v4Lits;
+        metricIpv4Lit.className = `metric-value font-mono ${v4Lits > 0 ? 'text-red' : 'text-green'}`;
+    }
+
     // Render Table
     renderResourceTable(data.resources || []);
 
@@ -231,7 +250,9 @@ function renderResourceTable(resources) {
     resources.forEach(r => {
         const tr = document.createElement('tr');
         let statusBadge = '<span class="badge badge-ready">IPv6 Ready</span>';
-        if (r.status === 'IPV4_ONLY_DEPENDENCY') {
+        if (r.is_ipv4_literal) {
+            statusBadge = '<span class="badge badge-broken" title="Raw IPv4 literal breaks on IPv6 networks (RFC 6052)">IPv4 Literal (RFC 6052)</span>';
+        } else if (r.status === 'IPV4_ONLY_DEPENDENCY') {
             statusBadge = '<span class="badge badge-v4only">IPv4 Only (No AAAA)</span>';
         } else if (r.status.startsWith('BROKEN_IPV6_')) {
             statusBadge = `<span class="badge badge-broken">Broken (${r.failed_stage})</span>`;
@@ -767,6 +788,64 @@ function showDrawerNode(node) {
     const v4TcpSuccess = hasV4Tcp ? v4Baseline.tcp_success : null;
     const showLatencyBox = hasV6Ttfb || hasV4Tcp;
 
+    // Nameserver Audit (RFC 3901)
+    const nsAudit = diag.ns_audit || (node.is_root ? currentAuditData?.metrics?.ns_audit : null);
+    let nsCardHtml = '';
+    if (nsAudit && nsAudit.total_nameservers > 0) {
+        const nsPass = nsAudit.rfc3901_compliant;
+        const nsTag = `<span class="stage-tag ${nsPass ? 'tag-pass' : (nsAudit.ipv6_nameservers_count > 0 ? 'tag-warn' : 'tag-fail')}">${nsAudit.ipv6_nameservers_count}/${nsAudit.total_nameservers} AAAA</span>`;
+        const nsDesc = nsPass
+            ? `Zone [${escapeHtml(nsAudit.apex_domain)}] has ≥2 IPv6-reachable nameservers (RFC 3901 compliant).`
+            : (nsAudit.ipv6_nameservers_count > 0
+                ? `Only ${nsAudit.ipv6_nameservers_count} of ${nsAudit.total_nameservers} authoritative nameservers have AAAA records. High risk of resolution failure for pure IPv6 recursive resolvers.`
+                : `No authoritative nameserver has an AAAA record. Pure IPv6 recursive resolvers cannot resolve this zone.`);
+        nsCardHtml = `
+        <div class="stage-card" style="margin-top:8px; border-color:${nsPass ? 'var(--color-green-border)' : (nsAudit.ipv6_nameservers_count > 0 ? 'var(--color-amber-border)' : 'var(--color-red-border)')};">
+            <div class="stage-top">
+                <span class="stage-title">Authoritative NS (RFC 3901) <a href="https://datatracker.ietf.org/doc/html/rfc3901" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 3901: DNS IPv6 Transport Operational Guidelines">RFC 3901</a></span>
+                ${nsTag}
+            </div>
+            <div class="stage-details">${nsDesc}</div>
+        </div>`;
+    }
+
+    // Hardcoded IPv4 Literal Alert (RFC 6052)
+    const isIpv4Lit = Boolean(node.is_ipv4_literal || (/^(\d{1,3}\.){3}\d{1,3}$/.test(node.domain || '')));
+    let ipv4LitCardHtml = '';
+    if (isIpv4Lit) {
+        ipv4LitCardHtml = `
+        <div class="stage-card" style="margin-top:8px; border-color:var(--color-red-border); background-color:var(--color-red-bg);">
+            <div class="stage-top">
+                <span class="stage-title" style="color:var(--color-red);">Hardcoded IPv4 Literal <a href="https://datatracker.ietf.org/doc/html/rfc6052" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 6052: IPv4-Embedded IPv6 Address Format">RFC 6052</a></span>
+                <span class="stage-tag tag-fail">BYPASSES DNS</span>
+            </div>
+            <div class="stage-details" style="color:#ff7b72;">
+                This dependency references a raw IPv4 literal address (${escapeHtml(node.domain)}). It completely bypasses DNS and fails immediately on pure IPv6 networks without NAT64 translation.
+            </div>
+        </div>`;
+    }
+
+    // Actionable CLI Probe Command
+    const host = node.domain || 'target.domain';
+    const firstAaaa = dns?.aaaa_records?.[0] || '';
+    const connectHost = firstAaaa ? `[${firstAaaa}]` : host;
+
+    let cliLabel = '';
+    let cliCmd = '';
+    if (!dns || !dns.has_aaaa) {
+        cliLabel = 'DNS AAAA & DNSSEC Audit';
+        cliCmd = `dig AAAA ${host} +dnssec +trace`;
+    } else if (!tcp || tcp.status !== 'TCP_SUCCESS') {
+        cliLabel = 'Raw IPv6 TCP Socket Handshake';
+        cliCmd = `curl -6 --connect-timeout 4 -I -v https://${host}`;
+    } else if (!tls || tls.status !== 'TLS_SUCCESS') {
+        cliLabel = 'IPv6 TLS Certificate & SNI Handshake';
+        cliCmd = `openssl s_client -6 -connect ${connectHost}:443 -servername ${host}`;
+    } else {
+        cliLabel = 'Strict IPv6 HTTP TTFB Latency Benchmark';
+        cliCmd = `curl -6 -s -o /dev/null -w "HTTP: %{http_code} | TTFB: %{time_starttransfer}s | Total: %{time_total}s\\n" https://${host}`;
+    }
+
     drawerContent.innerHTML = `
         <!-- Host Overview -->
         <div style="margin-bottom:14px;">
@@ -786,7 +865,7 @@ function showDrawerNode(node) {
         <!-- Stage 1: DNS -->
         <div class="stage-card">
             <div class="stage-top">
-                <span class="stage-title">1. DNS Resolution (AAAA)</span>
+                <span class="stage-title">1. DNS Resolution (AAAA) <a href="https://datatracker.ietf.org/doc/html/rfc3596" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 3596: DNS Extensions to Support IPv6">RFC 3596</a></span>
                 ${dnsTagHtml}
             </div>
             <div class="stage-details">
@@ -797,7 +876,7 @@ function showDrawerNode(node) {
         <!-- Stage 2: TCP -->
         <div class="stage-card">
             <div class="stage-top">
-                <span class="stage-title">2. Raw TCP SYN (AF_INET6)</span>
+                <span class="stage-title">2. Raw TCP SYN (AF_INET6) <a href="https://datatracker.ietf.org/doc/html/rfc8305" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 8305: Happy Eyeballs Version 2">RFC 8305</a></span>
                 ${tcpTagHtml}
             </div>
             <div class="stage-details">
@@ -808,7 +887,7 @@ function showDrawerNode(node) {
         <!-- Stage 3: TLS -->
         <div class="stage-card">
             <div class="stage-top">
-                <span class="stage-title">3. TLS Handshake & SNI</span>
+                <span class="stage-title">3. TLS Handshake & SNI <a href="https://datatracker.ietf.org/doc/html/rfc8446" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 8446: TLS 1.3">RFC 8446</a></span>
                 ${tlsTagHtml}
             </div>
             <div class="stage-details">
@@ -819,13 +898,16 @@ function showDrawerNode(node) {
         <!-- Stage 4: HTTP -->
         <div class="stage-card">
             <div class="stage-top">
-                <span class="stage-title">4. Strict HTTP/1.1 or H2 GET</span>
+                <span class="stage-title">4. Strict HTTP/1.1 or H2 GET <a href="https://datatracker.ietf.org/doc/html/rfc9113" target="_blank" rel="noopener noreferrer" class="rfc-pill" title="RFC 9113: HTTP/2 Specification">RFC 9113</a></span>
                 ${httpTagHtml}
             </div>
             <div class="stage-details">
                 ${httpDetailsHtml}
             </div>
         </div>
+
+        ${nsCardHtml}
+        ${ipv4LitCardHtml}
 
         <!-- Dual-Path TTFB Comparison -->
         ${showLatencyBox ? `
@@ -846,7 +928,40 @@ function showDrawerNode(node) {
                 <span class="font-mono text-red">Unreachable</span>
             </div>`}
         </div>` : ''}
+
+        <!-- Actionable CLI Verification Console -->
+        <div class="cli-console-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:0.70rem; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; color:var(--color-blue);">
+                    CLI Verification: ${escapeHtml(cliLabel)}
+                </span>
+                <button type="button" class="btn-copy-cli" id="btnCopyCliCmd" data-cmd="${escapeHtml(cliCmd)}">
+                    Copy Command
+                </button>
+            </div>
+            <pre class="cli-code-block font-mono"><code>${escapeHtml(cliCmd)}</code></pre>
+            <div style="font-size:0.67rem; color:var(--text-muted); margin-top:4px;">
+                Run directly in terminal to isolate transport layer and bypass browser Happy Eyeballs fallback.
+            </div>
+        </div>
     `;
+
+    const copyBtn = drawerContent.querySelector('#btnCopyCliCmd');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            const cmd = copyBtn.dataset.cmd;
+            if (cmd) {
+                navigator.clipboard.writeText(cmd);
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = 'Copied!';
+                copyBtn.style.color = '#3fb950';
+                setTimeout(() => {
+                    copyBtn.innerText = originalText;
+                    copyBtn.style.color = '';
+                }, 2000);
+            }
+        });
+    }
 }
 
 // ==========================================

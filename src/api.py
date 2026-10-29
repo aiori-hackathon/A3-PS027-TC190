@@ -18,6 +18,7 @@ from .diagnostics.pipeline import DiagnosticPipeline
 from .testbed.verifier import TestbedVerifier
 from .telemetry.context import TelemetryCollector
 from .benchmark.runner import BenchmarkRunner
+from .keepalive import start_keepalive
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +27,10 @@ app = FastAPI(
     description="Browser-based IPv6 Website and Dependency Readiness Auditor",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def on_startup():
+    start_keepalive()
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +50,16 @@ benchmark_runner = BenchmarkRunner(headless=True)
 
 class AuditRequest(BaseModel):
     url: str
+
+@app.get("/api/health")
+async def health_check():
+    """Lightweight health check endpoint for monitoring and anti-sleep keepalive."""
+    import datetime
+    return JSONResponse(content={
+        "status": "healthy",
+        "service": "aiori-ps027-auditor",
+        "timestamp_utc": datetime.datetime.utcnow().isoformat() + "Z"
+    })
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def serve_dashboard():

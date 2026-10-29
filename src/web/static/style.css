@@ -366,7 +366,7 @@ body {
 /* Metrics Row */
 .metrics-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -615,6 +615,65 @@ body {
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   margin-top: 10px;
+}
+
+.rfc-pill {
+  display: inline-block;
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  color: var(--color-blue);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-decoration: none;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.rfc-pill:hover {
+  border-color: var(--color-blue);
+  text-decoration: underline;
+}
+
+.tag-warn {
+  background-color: var(--color-amber-bg);
+  border-color: var(--color-amber-border);
+  color: var(--color-amber);
+}
+
+.cli-console-box {
+  background-color: #0b0e14;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+
+.cli-code-block {
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 6px 8px;
+  color: #79c0ff;
+  font-size: 0.70rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.btn-copy-cli {
+  background-color: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-copy-cli:hover {
+  background-color: #30363d;
+  color: #ffffff;
 }
 
 /* Terminal Console */
