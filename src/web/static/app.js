@@ -1500,10 +1500,10 @@ async function loadTelemetryContext() {
             }
 
             // Local IPv4
-            const v4Display = local.ipv4 || 'Unavailable';
+            const v4Display = local.ipv4 ? `${local.ipv4} (Container Private IP)` : 'Unavailable';
 
             // Local IPv6
-            const v6Display = local.ipv6 || 'Unavailable';
+            const v6Display = local.ipv6 ? local.ipv6 : 'None (Host container has no IPv6 interface)';
 
             // DNS Resolver & latency
             let dnsDisplay = 'Unavailable';
@@ -1516,7 +1516,7 @@ async function loadTelemetryContext() {
             }
 
             // Native IPv6 status
-            const nativeV6Display = data.has_native_ipv6 ? 'Active (Native IPv6)' : 'Inactive (IPv4 Only)';
+            const nativeV6Display = data.has_native_ipv6 ? 'Active (Native IPv6 Route)' : 'Inactive (Host is IPv4-Only)';
 
             box.innerHTML = `
                 <div class="telemetry-card font-mono">

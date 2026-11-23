@@ -39,9 +39,16 @@ class TelemetryCollector:
 
         return res
 
-    @staticmethod
-    def get_public_ip_telemetry() -> Dict[str, Any]:
-        """Fetch public IP, ASN, ISP, and Geolocation metadata."""
+    _cached_telemetry: Optional[Dict[str, Any]] = None
+    _cache_timestamp: float = 0.0
+
+    @classmethod
+    def get_public_ip_telemetry(cls) -> Dict[str, Any]:
+        """Fetch public IP, ASN, ISP, and Geolocation metadata with resilient multi-provider fallback and caching."""
+        current_time = time.time()
+        if cls._cached_telemetry and (current_time - cls._cache_timestamp < 600):
+            return dict(cls._cached_telemetry)
+
         telemetry: Dict[str, Any] = {
             "public_ipv4": None,
             "public_ipv6": None,
@@ -52,11 +59,11 @@ class TelemetryCollector:
             "country_code": None
         }
 
-        # Query IPv4 public IP
+        # 1. Query IPv4 public IP
         try:
             req = urllib.request.Request(
                 "https://api.ipify.org?format=json",
-                headers={"User-Agent": "AIORI-PS027-Auditor/1.0"}
+                headers={"User-Agent": "Mozilla/5.0 (compatible; AIORI-PS027-Auditor/1.0)"}
             )
             with urllib.request.urlopen(req, timeout=2.5) as r:
                 data = json.loads(r.read().decode())
@@ -64,36 +71,89 @@ class TelemetryCollector:
         except Exception as e:
             logger.debug(f"Public IPv4 probe failed: {e}")
 
-        # Query IPv6 public IP
+        # 2. Query IPv6 public IP
         try:
             req6 = urllib.request.Request(
                 "https://api64.ipify.org?format=json",
-                headers={"User-Agent": "AIORI-PS027-Auditor/1.0"}
+                headers={"User-Agent": "Mozilla/5.0 (compatible; AIORI-PS027-Auditor/1.0)"}
             )
             with urllib.request.urlopen(req6, timeout=2.5) as r:
                 data = json.loads(r.read().decode())
                 ip = data.get("ip")
-                if ":" in ip:
+                if ":" in str(ip):
                     telemetry["public_ipv6"] = ip
         except Exception as e:
             logger.debug(f"Public IPv6 probe failed: {e}")
 
-        # Query ASN and Geo data via ipwhois/ip-api
+        # 3. Query ASN and Geo data via resilient multi-provider fallback
+        # Tier A: ipwho.is (SSL, high accuracy, includes ASN and ISP)
+        geo_resolved = False
         try:
+            target_ip_arg = telemetry["public_ipv4"] if telemetry["public_ipv4"] else ""
             req_geo = urllib.request.Request(
-                "https://ipapi.co/json/",
-                headers={"User-Agent": "AIORI-PS027-Auditor/1.0"}
+                f"https://ipwho.is/{target_ip_arg}",
+                headers={"User-Agent": "Mozilla/5.0 (compatible; AIORI-PS027-Auditor/1.0)"}
             )
             with urllib.request.urlopen(req_geo, timeout=3.0) as r:
                 geo = json.loads(r.read().decode())
-                telemetry["asn"] = geo.get("asn")
-                telemetry["as_org"] = geo.get("org")
-                telemetry["city"] = geo.get("city")
-                telemetry["country"] = geo.get("country_name")
-                telemetry["country_code"] = geo.get("country_code")
+                if geo.get("success"):
+                    conn = geo.get("connection", {})
+                    asn_num = conn.get("asn")
+                    telemetry["asn"] = f"AS{asn_num}" if asn_num and not str(asn_num).startswith("AS") else str(asn_num) if asn_num else None
+                    telemetry["as_org"] = conn.get("org") or conn.get("isp")
+                    telemetry["city"] = geo.get("city")
+                    telemetry["country"] = geo.get("country")
+                    telemetry["country_code"] = geo.get("country_code")
+                    if not telemetry["public_ipv4"] and geo.get("ip") and ":" not in geo.get("ip"):
+                        telemetry["public_ipv4"] = geo.get("ip")
+                    geo_resolved = bool(telemetry["asn"] or telemetry["city"])
         except Exception as e:
-            logger.debug(f"Geo/ASN probe fallback: {e}")
+            logger.debug(f"ipwho.is probe failed: {e}")
 
+        # Tier B: ip-api.com (reliable fallback if Tier A is unreachable)
+        if not geo_resolved:
+            try:
+                target_ip_arg = telemetry["public_ipv4"] if telemetry["public_ipv4"] else ""
+                req_geo2 = urllib.request.Request(
+                    f"http://ip-api.com/json/{target_ip_arg}",
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; AIORI-PS027-Auditor/1.0)"}
+                )
+                with urllib.request.urlopen(req_geo2, timeout=3.0) as r:
+                    geo = json.loads(r.read().decode())
+                    if geo.get("status") == "success":
+                        asn_str = geo.get("as", "")
+                        parts = asn_str.split(" ", 1)
+                        telemetry["asn"] = parts[0] if parts else None
+                        telemetry["as_org"] = parts[1] if len(parts) > 1 else geo.get("org") or geo.get("isp")
+                        telemetry["city"] = geo.get("city")
+                        telemetry["country"] = geo.get("country")
+                        telemetry["country_code"] = geo.get("countryCode")
+                        if not telemetry["public_ipv4"] and geo.get("query"):
+                            telemetry["public_ipv4"] = geo.get("query")
+                        geo_resolved = True
+            except Exception as e:
+                logger.debug(f"ip-api.com probe failed: {e}")
+
+        # Tier C: ipapi.co (final fallback)
+        if not geo_resolved:
+            try:
+                req_geo3 = urllib.request.Request(
+                    "https://ipapi.co/json/",
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; AIORI-PS027-Auditor/1.0)"}
+                )
+                with urllib.request.urlopen(req_geo3, timeout=3.0) as r:
+                    geo = json.loads(r.read().decode())
+                    if not geo.get("error"):
+                        telemetry["asn"] = geo.get("asn")
+                        telemetry["as_org"] = geo.get("org")
+                        telemetry["city"] = geo.get("city")
+                        telemetry["country"] = geo.get("country_name")
+                        telemetry["country_code"] = geo.get("country_code")
+            except Exception as e:
+                logger.debug(f"ipapi.co probe failed: {e}")
+
+        cls._cached_telemetry = dict(telemetry)
+        cls._cache_timestamp = current_time
         return telemetry
 
     @staticmethod
