@@ -10,7 +10,6 @@
 **Category**: Internet Measurement & Protocol Engineering  
 **Team Code**: `A3-PS027-TC190`  
 **Initiative**: Advanced Internet Operations Research in India (AIORI 3.0), supported by NIXI & IIFON  
-**Regional Judging Date**: November 26, 2026  
 
 ---
 
