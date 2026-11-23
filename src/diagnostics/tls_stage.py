@@ -51,9 +51,14 @@ class TLSDiagnostic:
 
         try:
             if sock is None:
-                sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-                sock.settimeout(self.timeout)
-                sock.connect((ipv6_addr, port, 0, 0))
+                if ":" in ipv6_addr:
+                    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                    sock.settimeout(self.timeout)
+                    sock.connect((ipv6_addr, port, 0, 0))
+                else:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(self.timeout)
+                    sock.connect((ipv6_addr, port))
 
             context = ssl.create_default_context()
             context.check_hostname = True

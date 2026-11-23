@@ -64,9 +64,14 @@ class HTTPDiagnostic:
                 needs_close = False
             else:
                 # Create connection
-                raw_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-                raw_sock.settimeout(self.timeout)
-                raw_sock.connect((ipv6_addr, port, 0, 0))
+                if ":" in ipv6_addr:
+                    raw_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                    raw_sock.settimeout(self.timeout)
+                    raw_sock.connect((ipv6_addr, port, 0, 0))
+                else:
+                    raw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    raw_sock.settimeout(self.timeout)
+                    raw_sock.connect((ipv6_addr, port))
 
                 if scheme == "https":
                     ctx = ssl.create_default_context()
