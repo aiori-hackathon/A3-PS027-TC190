@@ -139,6 +139,8 @@ class BenchmarkRunner:
                 "has_aaaa": apex_audit.get("stages", {}).get("dns", {}).get("has_aaaa", False),
                 "is_ipv6_ready": apex_is_ready,
                 "status": apex_audit.get("overall_status"),
+                "provenance": apex_audit.get("provenance", "UNVERIFIED"),
+                "validation_mode": apex_audit.get("validation_mode", "NONE"),
                 "failed_stage": apex_audit.get("failed_at_stage"),
                 "ns_audit": ns_audit
             },

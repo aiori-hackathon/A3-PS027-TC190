@@ -131,3 +131,19 @@ curl -X POST http://<HOST>:8000/api/audit \
   -H "X-API-Key: $AUDIT_API_KEY" \
   -d '{"url":"https://aiori.in"}'
 ```
+
+## 5. Client Compatibility
+
+The web dashboard targets current Chrome, Edge, Firefox, and Safari releases
+on Windows, macOS, Linux, Android, and iOS. It requires JavaScript, Canvas 2D,
+Fetch, and CSS Grid support. Older browsers may load the page but are not
+supported for interactive graph rendering.
+
+The packaged extension has a separate support boundary. Its native Side Panel
+workflow is supported in current Chrome, Microsoft Edge, and Brave releases.
+Firefox and Safari cannot provide the same experience because they do not
+expose the Chrome `sidePanel` API; use the web dashboard there.
+
+Functionality is intended to be equivalent across supported platforms, while
+font rendering, canvas anti-aliasing, viewport sizing, and network availability
+can vary by operating system and browser.

@@ -51,6 +51,12 @@ A complete, native in-browser Chrome extension built for **AIORI-3 PS-027** that
 
 ---
 
+## Browser Support
+
+This is a Chromium Manifest V3 extension. The native Side Panel workflow is
+supported in current Chrome, Microsoft Edge, and Brave releases. Firefox and
+Safari are not supported by this package; use the web dashboard there.
+
 ## How to Install (Load Unpacked in Chrome / Brave / Edge)
 
 1. Open Google Chrome (or any Chromium browser).

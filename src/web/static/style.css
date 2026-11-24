@@ -126,6 +126,9 @@ body {
 .nav-tabs {
   display: flex;
   gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .nav-tab {
@@ -141,6 +144,8 @@ body {
   font-weight: 500;
   padding: 8px 14px;
   cursor: pointer;
+  flex: 0 0 auto;
+  white-space: nowrap;
   transition: color 150ms ease, border-color 150ms ease;
 }
 
@@ -464,6 +469,7 @@ body {
   flex: 1;
   background-color: var(--bg-subsurface);
   cursor: grab;
+  touch-action: none;
 }
 
 #dependencyCanvas:active {

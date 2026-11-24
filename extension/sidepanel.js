@@ -480,9 +480,13 @@ function renderAuditResults(data, isLive) {
 
     // 1. Data Provenance & Timestamp
     if (provenanceBadge) {
-        if (isLive) {
+        const provenance = data.provenance || data.apex_audit?.provenance || data.apex_diagnostics?.provenance;
+        if (provenance === 'INFERRED_INFRASTRUCTURE') {
             provenanceBadge.className = 'score-provenance-badge score-provenance-live';
-            provenanceBadge.innerText = 'Live Probe :8000';
+            provenanceBadge.innerText = 'Infrastructure Verified';
+        } else if (isLive) {
+            provenanceBadge.className = 'score-provenance-badge score-provenance-live';
+            provenanceBadge.innerText = provenance === 'DIRECT_IPV6_WIRE_PROBE' ? 'Live IPv6 Wire Probe' : 'Live Probe :8000';
         } else {
             provenanceBadge.className = 'score-provenance-badge score-provenance-simulated';
             provenanceBadge.innerText = 'Simulated Trace';

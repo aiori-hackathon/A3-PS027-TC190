@@ -47,8 +47,98 @@ def test_pipeline_ipv6_ready_site():
         assert res["overall_status"] == "FULL_IPV6_READY"
         assert res["is_ipv6_ready"] is True
     else:
-        assert res["overall_status"] in ["BROKEN_IPV6_TCP", "SCANNER_NO_IPV6_ROUTE"]
-        assert res["failed_at_stage"] == "TCP"
+        assert res["overall_status"] in [
+            "FULL_IPV6_READY",
+            "INFRASTRUCTURE_VERIFIED",
+            "BROKEN_IPV6_TCP",
+            "SCANNER_NO_IPV6_ROUTE",
+        ]
+        if res["overall_status"] in ["BROKEN_IPV6_TCP", "SCANNER_NO_IPV6_ROUTE"]:
+            assert res["failed_at_stage"] == "TCP"
+
+
+def test_pipeline_infrastructure_verified_without_native_ipv6(monkeypatch):
+    pipeline = DiagnosticPipeline()
+    monkeypatch.setattr(
+        pipeline.dns_stage,
+        "diagnose",
+        lambda host: {
+            "has_aaaa": True,
+            "has_a": True,
+            "aaaa_records": ["2001:4860:4860::8888"],
+            "a_records": ["8.8.8.8"],
+            "latency_ms": 1.0,
+        },
+    )
+    monkeypatch.setattr(
+        pipeline.dns_stage,
+        "diagnose_nameservers",
+        lambda host: {"rfc3901_compliant": True},
+    )
+    monkeypatch.setattr(
+        pipeline.tcp_stage,
+        "diagnose_ipv4",
+        lambda address, port: {"status": "TCP_SUCCESS"},
+    )
+    monkeypatch.setattr(
+        pipeline.tcp_stage,
+        "diagnose_ipv6",
+        lambda **kwargs: ({"status": "TCP_NO_ROUTE", "error_detail": "no route"}, None),
+    )
+    monkeypatch.setattr(
+        pipeline.tls_stage,
+        "diagnose_ipv6",
+        lambda **kwargs: ({"status": "TLS_SUCCESS"}, None),
+    )
+    monkeypatch.setattr(
+        pipeline.http_stage,
+        "diagnose_ipv6",
+        lambda **kwargs: {"status": "HTTP_SUCCESS"},
+    )
+    monkeypatch.setattr(
+        "src.diagnostics.pipeline.TelemetryCollector.get_local_interfaces",
+        lambda: {"ipv4": "192.0.2.10", "ipv6": None},
+    )
+
+    result = pipeline.audit_resource("https://example.com")
+
+    assert result["overall_status"] == "INFRASTRUCTURE_VERIFIED"
+    assert result["is_ipv6_ready"] is True
+    assert result["provenance"] == "INFERRED_INFRASTRUCTURE"
+    assert result["validation_mode"] == "IPV4_BASELINE_WITH_IPV6_DNS"
+
+
+def test_pipeline_rejects_non_global_aaaa_as_infrastructure(monkeypatch):
+    pipeline = DiagnosticPipeline()
+    monkeypatch.setattr(
+        pipeline.dns_stage,
+        "diagnose",
+        lambda host: {
+            "has_aaaa": True,
+            "has_a": True,
+            "aaaa_records": ["100::1"],
+            "a_records": ["192.0.2.1"],
+        },
+    )
+    monkeypatch.setattr(
+        pipeline.tcp_stage,
+        "diagnose_ipv4",
+        lambda address, port: {"status": "TCP_SUCCESS"},
+    )
+    monkeypatch.setattr(
+        pipeline.tcp_stage,
+        "diagnose_ipv6",
+        lambda **kwargs: ({"status": "TCP_NO_ROUTE", "error_detail": "no route"}, None),
+    )
+    monkeypatch.setattr(
+        "src.diagnostics.pipeline.TelemetryCollector.get_local_interfaces",
+        lambda: {"ipv4": "192.0.2.10", "ipv6": None},
+    )
+
+    result = pipeline.audit_resource("https://example.com")
+
+    assert result["overall_status"] == "BROKEN_IPV6_TCP"
+    assert result["is_ipv6_ready"] is False
 
 def test_pipeline_ipv4_only_site():
     """Verify that an IPv4-only site is flagged at the DNS stage."""
