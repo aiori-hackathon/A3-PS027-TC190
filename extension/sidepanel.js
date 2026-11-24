@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initCanvas();
     initTabNavigation();
     initControls();
+    initApiKeyControl();
     initDisclosureAndToggles();
     initTerminalActions();
     initActiveTabDetection();
@@ -372,6 +373,102 @@ function setupSearchClear(inputId, clearBtnId, wrapId, onInputCallback) {
 // ==========================================================================
 // 6. CORE AUDIT RUNNER & PIPELINE EXECUTION
 // ==========================================================================
+let activeApiKey = '';
+
+async function initApiKeyControl() {
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveButton = document.getElementById('btnSaveApiKey');
+    if (!apiKeyInput || !saveButton) return;
+
+    await getApiKey();
+    if (activeApiKey) apiKeyInput.value = activeApiKey;
+
+    saveButton.addEventListener('click', async () => {
+        activeApiKey = apiKeyInput.value.trim();
+        if (chrome.storage?.session) {
+            await chrome.storage.session.set({ aioriApiKey: activeApiKey });
+        }
+        appendTerminalLog('SYSTEM', activeApiKey ? 'API key saved for this browser session.' : 'API key cleared.');
+    });
+}
+
+async function getApiKey() {
+    if (!activeApiKey && chrome.storage?.session) {
+        const stored = await chrome.storage.session.get('aioriApiKey');
+        activeApiKey = stored.aioriApiKey || '';
+    }
+    return activeApiKey;
+}
+
+function normalizeLiveAuditReport(report) {
+    if (!report || typeof report !== 'object') return null;
+    if (report.readiness_score !== undefined) return report;
+    const apex = report.apex_audit || {};
+    const metrics = report.metrics || {};
+    const resources = Array.from(report.resources || []);
+    return {
+        target_domain: report.apex_domain || report.name || 'Unknown target',
+        readiness_score: metrics.readiness_score_percent ?? 0,
+        provenance: apex.provenance || report.provenance || 'UNVERIFIED',
+        validation_mode: apex.validation_mode || report.validation_mode || 'NONE',
+        summary: {
+            total_dependencies: metrics.total_resources ?? resources.length,
+            ipv6_ready_count: metrics.ipv6_ready_count ?? 0,
+            ipv4_only_count: metrics.ipv4_only_count ?? 0,
+            broken_route_count: metrics.broken_ipv6_count ?? 0
+        },
+        apex_diagnostics: {
+            is_ipv6_ready: apex.is_ipv6_ready ?? false,
+            has_aaaa: apex.has_aaaa ?? false,
+            overall_status: apex.status || 'UNKNOWN',
+            failed_stage: apex.failed_stage || null,
+            provenance: apex.provenance || 'UNVERIFIED',
+            dns: apex.ns_audit ? { nameserver_audit: apex.ns_audit } : {}
+        },
+        dependencies: resources.map(resource => ({
+            domain: resource.domain,
+            resource_type: resource.resource_type,
+            is_third_party: !resource.is_first_party,
+            is_ipv6_ready: resource.is_ipv6_ready,
+            is_ipv4_literal: resource.is_ipv4_literal,
+            protocol_status: resource.status,
+            diagnostics: {
+                is_ipv6_ready: resource.is_ipv6_ready,
+                overall_status: resource.status,
+                failed_stage: resource.failed_stage
+            }
+        }))
+    };
+}
+
+async function createAndPollAuditJob(targetUrl) {
+    const apiKey = await getApiKey();
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['X-API-Key'] = apiKey;
+    const createResponse = await fetch(`${ACTIVE_API_BASE}/api/v2/audits`, {
+        method: 'POST', headers, body: JSON.stringify({ url: targetUrl })
+    });
+    if (!createResponse.ok) {
+        let message = `Job creation failed (HTTP ${createResponse.status})`;
+        try { message = (await createResponse.json()).detail || message; } catch (_) {}
+        throw new Error(message);
+    }
+    const job = await createResponse.json();
+    const deadline = Date.now() + 120000;
+    while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const statusResponse = await fetch(`${ACTIVE_API_BASE}/api/v2/audits/${encodeURIComponent(job.job_id)}`, {
+            headers: apiKey ? { 'X-API-Key': apiKey } : {}
+        });
+        if (!statusResponse.ok) throw new Error(`Job status failed (HTTP ${statusResponse.status})`);
+        const status = await statusResponse.json();
+        if (status.state === 'succeeded') return normalizeLiveAuditReport(status.result);
+        if (status.state === 'failed') throw new Error(status.error || 'Audit job failed');
+        appendTerminalLog('SYSTEM', `Audit job ${status.state}; waiting for results...`);
+    }
+    throw new Error('Audit job timed out after 120 seconds');
+}
+
 async function runAudit(targetUrl) {
     if (!targetUrl) return;
 
@@ -380,36 +477,19 @@ async function runAudit(targetUrl) {
 
     try {
         let report = null;
-        let isLive = false;
-
-        // Attempt live API
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000);
-            const res = await fetch(`${ACTIVE_API_BASE}/api/audit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: targetUrl }),
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-                report = await res.json();
-                isLive = true;
-            }
+            report = await createAndPollAuditJob(targetUrl);
         } catch (fetchErr) {
-            console.warn('API error, using probe fallback:', fetchErr);
+            if (fetchErr.message?.includes('fetch')) {
+                throw new Error(`Backend unreachable at ${ACTIVE_API_BASE}. Start the local API or switch to the deployed backend.`);
+            }
+            throw fetchErr;
         }
 
-        // Offline / simulated fallback with transparent badge
-        if (!report) {
-            report = generateMockAuditReport(targetUrl);
-            isLive = false;
-            appendTerminalLog('WARN', 'Backend daemon unreachable. Running simulated fallback trace.');
-        }
+        if (!report) throw new Error('The backend returned an unsupported audit response');
 
         currentAuditData = report;
-        renderAuditResults(report, isLive);
+        renderAuditResults(report, true);
         setAuditState('results');
         appendTerminalLog('PASS', `Audit complete. Readiness Score: ${report.readiness_score}%`);
     } catch (err) {
@@ -1388,68 +1468,6 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-}
-
-function generateMockAuditReport(url) {
-    let domain = 'target.domain';
-    try { domain = new URL(url).hostname; } catch { domain = url; }
-
-    const isGov = domain.endsWith('.gov.in') || domain.includes('nic');
-    const isGithub = domain.includes('github.com');
-
-    const apexV6 = !isGithub;
-    const v6Count = isGithub ? 0 : (isGov ? 14 : 9);
-    const v4Count = isGithub ? 12 : 2;
-    const totalCount = v6Count + v4Count;
-    const score = apexV6 ? Math.round((v6Count / totalCount) * 100) : 0;
-
-    return {
-        target_domain: domain,
-        readiness_score: score,
-        summary: {
-            total_dependencies: totalCount,
-            ipv6_ready_count: v6Count,
-            ipv4_only_count: v4Count,
-            broken_route_count: 0
-        },
-        apex_diagnostics: {
-            is_ipv6_ready: apexV6,
-            overall_status: apexV6 ? 'PASS' : 'FAIL_NO_AAAA',
-            dns: {
-                aaaa_records: apexV6 ? ['2404:6800:4009:803::200e'] : [],
-                a_records: ['140.82.121.4'],
-                rtt_ms: 12.4,
-                nameserver: '1.1.1.1'
-            },
-            tcp: {
-                status: apexV6 ? 'TCP_SUCCESS' : 'TCP_NO_ROUTE',
-                rtt_ms: apexV6 ? 22.1 : null
-            },
-            tcp_v4: {
-                status: 'TCP_SUCCESS',
-                rtt_ms: 24.3
-            },
-            tls: {
-                status: apexV6 ? 'TLS_SUCCESS' : null,
-                version: 'TLSv1.3',
-                cipher: 'TLS_AES_256_GCM_SHA384',
-                alpn: 'h2'
-            },
-            http: {
-                status_code: 200,
-                protocol: 'h2',
-                content_type: 'text/html; charset=utf-8',
-                content_length: 42100
-            }
-        },
-        dependencies: [
-            { domain: `cdn.${domain}`, resource_type: 'script', is_third_party: false, is_ipv6_ready: true, remote_ip: '2606:4700::6810' },
-            { domain: `assets.${domain}`, resource_type: 'stylesheet', is_third_party: false, is_ipv6_ready: true, remote_ip: '2606:4700::6811' },
-            { domain: 'fonts.googleapis.com', resource_type: 'font', is_third_party: true, is_ipv6_ready: true, remote_ip: '2404:6800:4009::200a' },
-            { domain: 'analytics.tracker.net', resource_type: 'script', is_third_party: true, is_ipv6_ready: false, remote_ip: '198.51.100.42' },
-            { domain: 'api.legacy-auth.com', resource_type: 'xhr', is_third_party: true, is_ipv6_ready: false, remote_ip: '203.0.113.88' }
-        ]
-    };
 }
 
 function getBundledBenchmarkData() {

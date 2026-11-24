@@ -492,6 +492,15 @@ body {
     cursor: not-allowed;
 }
 
+.api-key-row {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.api-key-row .target-input {
+    padding-left: var(--space-8);
+}
+
 .presets-flex {
     display: flex;
     align-items: center;
