@@ -46,18 +46,18 @@ An apex domain resolving to an `AAAA` record **does not make a website IPv6-read
 2. **4-Stage Protocol Failure Isolation**:
    - **Stage 1 (DNS — RFC 3596)**: Authoritative `A` vs `AAAA` resolution, RFC 3901 Authoritative Nameserver (NS) parity checks, CNAME chains, NODATA, and SERVFAIL isolation.
    - **Stage 2 (TCP — RFC 793)**: Raw OS socket connection on port 80/443 capturing Connection Refused, No Route (`EHOSTUNREACH`), and Handshake Timeouts.
-   - **Stage 3 (TLS — RFC 8446)**: SSL/TLS handshake with SNI; inspects certificate expiry, untrusted CAs, SAN validation, and ALPN negotiation over pure IPv6.
-   - **Stage 4 (HTTP — RFC 9110 / RFC 9113)**: Direct IPv6 HTTP/1.1 and HTTP/2 retrieval measuring pure IPv6 Time-To-First-Byte (TTFB) and flagging HTTP 4xx/5xx status codes.
+   - **Stage 3 (TLS — RFC 8446)**: SSL/TLS handshake with SNI; inspects certificate expiry, untrusted CAs, SAN validation, and cipher/TLS version details.
+   - **Stage 4 (HTTP — RFC 9110)**: Direct IPv6 HTTP/1.1 retrieval measuring pure IPv6 Time-To-First-Byte (TTFB) and flagging HTTP 4xx/5xx status codes.
 3. **Vantage-Point Aware Measurement & Provenance**:
    - Accurately identifies whether the scanner is running on a **Native Dual-Stack Client** (`DIRECT_IPV6_WIRE_PROBE`) or an **IPv4 Cloud Container** (`INFERRED_INFRASTRUCTURE`).
    - Evaluates Global Unicast Addresses (RFC 4291 `2000::/3`), RFC 3901 NS parity, and certificate validity without producing false negatives on cloud hosting.
 4. **RFC 6052 / RFC 6147 DNS64 Synthetic Prefix Filter**: Automatically filters out synthetic NAT64 gateway prefixes (`64:ff9b::/96`) to ensure true authoritative dual-stack detection.
 5. **Hardcoded IPv4 Literal Detection**: Scans dependency URLs for embedded raw IPv4 addresses (`http://192.0.2.1/...`) that bypass DNS resolution and break in IPv6-only environments.
-6. **Enterprise SSRF Protection & Host Sanitization**: Blocks private subnets (RFC 1918), loopback, link-local, and AWS metadata endpoints (`169.254.169.254`) on all audit interfaces.
+6. **Public-Host Sanitization**: Blocks private subnets (RFC 1918), loopback, link-local, reserved addresses, and locally resolved non-global targets on audit interfaces.
 7. **Durable SQLite Job Processing (`/api/v2/audits`)**: Asynchronous background audit queue with persistent SQLite state and auto-recovery of interrupted jobs on startup.
 8. **Interactive Dependency Graph & Blast Radius Scoring**: Distinguishes render-blocking core assets (CSS, JS) from optional telemetry pixels to quantify the real-world operational blast radius of broken dependencies.
 9. **Actionable CLI Reproduction & RFC Tooltips**: Every diagnostic node provides instant copy-to-clipboard terminal commands (`dig +trace AAAA`, `curl -6 -Iv`, `openssl s_client`) and hyperlinks to relevant IETF RFC standards.
-10. **Always-On Cloud Keep-Alive Daemon**: Built-in background worker (`src/keepalive.py`) pings `/api/health` every 10 minutes to prevent container sleep on Render's free tier.
+10. **Optional Cloud Keep-Alive Worker**: An opt-in background worker (`src/keepalive.py`) can ping `/api/health` every 10 minutes when `ENABLE_KEEPALIVE=true`.
 
 ---
 
@@ -81,7 +81,7 @@ We audited 30 high-impact Indian websites across 6 critical infrastructure secto
 
 ## 🧪 Ground-Truth Testbed Verification
 
-To mathematically validate our diagnostic engine against false positives and false negatives, we constructed a controlled synthetic testbed (`src/testbed/server.py`) evaluated via live HTTP requests using `fastapi.testclient.TestClient`:
+To validate the controlled fixture classifications against false positives and false negatives, we constructed a synthetic testbed (`src/testbed/server.py`) and evaluate its HTTP responses using `fastapi.testclient.TestClient`:
 
 | Synthetic Test Case | Seeded Protocol Anomaly | Expected Verdict | AIORI Detection |
 | :--- | :--- | :--- | :---: |
@@ -91,7 +91,7 @@ To mathematically validate our diagnostic engine against false positives and fal
 | `/mock/broken-tls.js` | Certificate Common Name mismatch | `BROKEN_IPV6_TLS` | ✅ PASS |
 | `/mock/broken-http-500.json` | Returns HTTP 500 Internal Server Error | `BROKEN_IPV6_HTTP` | ✅ PASS |
 
-### Confusion Matrix Metrics:
+### Controlled-Fixture Confusion Matrix Metrics:
 $$\text{Precision} = \frac{TP}{TP + FP} = \frac{6}{6 + 0} = \mathbf{100\%}$$
 $$\text{Recall} = \frac{TP}{TP + FN} = \frac{6}{6 + 0} = \mathbf{100\%}$$
 $$F_1\text{-Score} = \mathbf{1.0}$$
@@ -128,7 +128,7 @@ $$F_1\text{-Score} = \mathbf{1.0}$$
 │   │   ├── dns_stage.py                      # AAAA resolution, NS parity & DNS64 filter
 │   │   ├── tcp_stage.py                      # Pure AF_INET6 socket connection probe
 │   │   ├── tls_stage.py                      # TLS handshake, SNI & certificate validator
-│   │   └── http_stage.py                     # HTTP/1.1 & HTTP/2 IPv6 retrieval & TTFB
+│   │   └── http_stage.py                     # HTTP/1.1 IPv6 retrieval & TTFB
 │   ├── testbed/                              # Ground-truth verification environment
 │   │   ├── server.py                         # Multi-port mock server with seeded failures
 │   │   ├── manifest.py                       # Ground-truth test asset definitions

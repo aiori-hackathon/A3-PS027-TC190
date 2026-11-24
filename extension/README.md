@@ -14,7 +14,7 @@ A complete, native in-browser Chrome extension built for **AIORI-3 PS-027** that
 ### 2. Multi-Stage OSI Protocol Diagnostics
 - **Stage 1: DNS Resolution**: Authoritative nameserver resolution, AAAA and A record extraction, DNS RTT.
 - **Stage 2: TCP Handshake**: `AF_INET6` socket SYN/ACK to port 443, connection timing, failure isolation (`TCP_SUCCESS` vs `TCP_NO_ROUTE` / timeout).
-- **Stage 3: TLS Handshake & ALPN**: TLSv1.3 negotiation, cipher suites, SNI verification, and HTTP/2 ALPN negotiation.
+- **Stage 3: TLS Handshake**: SNI, certificate verification, hostname checks, cipher suites, and TLS version details.
 - **Stage 4: HTTP GET & Subresources**: Application-layer status verification and content delivery over pure IPv6.
 - **Engineering Remediation Drawer**: Root-cause analysis and DNS/BGP/CDN remediation guidance per RFC 8305 and RFC 4038.
 
