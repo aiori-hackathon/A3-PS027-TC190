@@ -2,7 +2,7 @@
 
 [![Live Dashboard](https://img.shields.io/badge/Render-Live%20Production-2ea44f?style=flat&logo=render)](https://a3-ps027-tc190.onrender.com)
 [![Status](https://img.shields.io/badge/Milestone-Selected%20for%20Regional%20Hackathon%20(Nov%2026)-0969da?style=flat)](https://a3-ps027-tc190.onrender.com)
-[![Test Suite](https://img.shields.io/badge/Tests-8%2F8%20Passing%20(100%25)-success?style=flat)](./tests)
+[![Test Suite](https://img.shields.io/badge/Tests-13%2F13%20Passing%20(100%25)-success?style=flat)](./tests)
 [![Precision & Recall](https://img.shields.io/badge/Ground--Truth%20Precision%20%26%20Recall-100%25-blueviolet?style=flat)](https://a3-ps027-tc190.onrender.com/api/testbed)
 [![Chrome Extension](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3%20Side%20Panel-orange?style=flat&logo=googlechrome)](./extension.zip)
 
@@ -19,6 +19,7 @@
 | :--- | :--- | :--- |
 | **Production Web Dashboard** | [https://a3-ps027-tc190.onrender.com](https://a3-ps027-tc190.onrender.com) | Unified Live Visualizer, 30-Site Benchmark, Testbed, and Telemetry |
 | **Interactive OpenAPI / Swagger** | [https://a3-ps027-tc190.onrender.com/docs](https://a3-ps027-tc190.onrender.com/docs) | Complete REST API specification with live executable endpoints |
+| **Container Readiness Probe** | [https://a3-ps027-tc190.onrender.com/api/ready](https://a3-ps027-tc190.onrender.com/api/ready) | Liveness & Playwright browser runtime health verification |
 | **Chrome Extension (MV3)** | [`extension.zip`](./extension.zip) | Real-time Side Panel auditor with on-the-fly DOM dependency crawling |
 | **Web Store & Installation Guide** | [`CHROMEWEBSTORE.md`](./CHROMEWEBSTORE.md) | Step-by-step developer unpack & sideload instructions |
 | **Orientation & Demo Video** | [https://youtu.be/L3E-40B2W-M](https://youtu.be/L3E-40B2W-M) | Team walkthrough covering PS-027 breakdown and architecture |
@@ -47,11 +48,16 @@ An apex domain resolving to an `AAAA` record **does not make a website IPv6-read
    - **Stage 2 (TCP — RFC 793)**: Raw OS socket connection on port 80/443 capturing Connection Refused, No Route (`EHOSTUNREACH`), and Handshake Timeouts.
    - **Stage 3 (TLS — RFC 8446)**: SSL/TLS handshake with SNI; inspects certificate expiry, untrusted CAs, SAN validation, and ALPN negotiation over pure IPv6.
    - **Stage 4 (HTTP — RFC 9110 / RFC 9113)**: Direct IPv6 HTTP/1.1 and HTTP/2 retrieval measuring pure IPv6 Time-To-First-Byte (TTFB) and flagging HTTP 4xx/5xx status codes.
-3. **RFC 6052 / RFC 6147 DNS64 Synthetic Prefix Filter**: Automatically filters out synthetic NAT64 gateway prefixes (`64:ff9b::/96`) to ensure true authoritative dual-stack detection.
-4. **Hardcoded IPv4 Literal Detection**: Scans dependency URLs for embedded raw IPv4 addresses (`http://192.0.2.1/...`) that bypass DNS resolution and break in IPv6-only environments.
-5. **Interactive Dependency Graph & Blast Radius Scoring**: Distinguishes render-blocking core assets (CSS, JS) from optional telemetry pixels to quantify the real-world operational blast radius of broken dependencies.
-6. **Actionable CLI Reproduction & RFC Tooltips**: Every diagnostic node provides instant copy-to-clipboard terminal commands (`dig +trace AAAA`, `curl -6 -Iv`, `openssl s_client`) and hyperlinks to relevant IETF RFC standards.
-7. **Always-On Cloud Keep-Alive Daemon**: Built-in background worker (`src/keepalive.py`) pings `/api/health` every 10 minutes to prevent container sleep on Render's free tier.
+3. **Vantage-Point Aware Measurement & Provenance**:
+   - Accurately identifies whether the scanner is running on a **Native Dual-Stack Client** (`DIRECT_IPV6_WIRE_PROBE`) or an **IPv4 Cloud Container** (`INFERRED_INFRASTRUCTURE`).
+   - Evaluates Global Unicast Addresses (RFC 4291 `2000::/3`), RFC 3901 NS parity, and certificate validity without producing false negatives on cloud hosting.
+4. **RFC 6052 / RFC 6147 DNS64 Synthetic Prefix Filter**: Automatically filters out synthetic NAT64 gateway prefixes (`64:ff9b::/96`) to ensure true authoritative dual-stack detection.
+5. **Hardcoded IPv4 Literal Detection**: Scans dependency URLs for embedded raw IPv4 addresses (`http://192.0.2.1/...`) that bypass DNS resolution and break in IPv6-only environments.
+6. **Enterprise SSRF Protection & Host Sanitization**: Blocks private subnets (RFC 1918), loopback, link-local, and AWS metadata endpoints (`169.254.169.254`) on all audit interfaces.
+7. **Durable SQLite Job Processing (`/api/v2/audits`)**: Asynchronous background audit queue with persistent SQLite state and auto-recovery of interrupted jobs on startup.
+8. **Interactive Dependency Graph & Blast Radius Scoring**: Distinguishes render-blocking core assets (CSS, JS) from optional telemetry pixels to quantify the real-world operational blast radius of broken dependencies.
+9. **Actionable CLI Reproduction & RFC Tooltips**: Every diagnostic node provides instant copy-to-clipboard terminal commands (`dig +trace AAAA`, `curl -6 -Iv`, `openssl s_client`) and hyperlinks to relevant IETF RFC standards.
+10. **Always-On Cloud Keep-Alive Daemon**: Built-in background worker (`src/keepalive.py`) pings `/api/health` every 10 minutes to prevent container sleep on Render's free tier.
 
 ---
 
@@ -75,15 +81,15 @@ We audited 30 high-impact Indian websites across 6 critical infrastructure secto
 
 ## 🧪 Ground-Truth Testbed Verification
 
-To mathematically validate our diagnostic engine against false positives and false negatives, we constructed a controlled synthetic testbed (`src/testbed/server.py`) with seeded protocol defects:
+To mathematically validate our diagnostic engine against false positives and false negatives, we constructed a controlled synthetic testbed (`src/testbed/server.py`) evaluated via live HTTP requests using `fastapi.testclient.TestClient`:
 
 | Synthetic Test Case | Seeded Protocol Anomaly | Expected Verdict | AIORI Detection |
 | :--- | :--- | :--- | :---: |
-| `/asset/dual-stack.js` | Valid dual-stack IPv4/IPv6 endpoint | `FULL_IPV6_READY` | ✅ PASS |
-| `/asset/ipv4-only.css` | DNS resolves only `A` record (no `AAAA`) | `NO_AAAA` (DNS Stage) | ✅ PASS |
-| `/asset/broken-tcp.js` | AAAA points to an unroutable blackhole | `TCP_TIMEOUT` (TCP Stage) | ✅ PASS |
-| `/asset/tls-mismatch.png` | Certificate Common Name mismatch | `TLS_HOSTNAME_MISMATCH` (TLS Stage) | ✅ PASS |
-| `/asset/http-error.json` | Returns HTTP 500 Internal Server Error | `HTTP_STATUS_500` (HTTP Stage) | ✅ PASS |
+| `/static/valid-dualstack.js` | Valid dual-stack IPv4/IPv6 endpoint | `FULL_IPV6_READY` | ✅ PASS |
+| `/mock/seeded-ipv4-only.css` | DNS resolves only `A` record (no `AAAA`) | `IPV4_ONLY_DEPENDENCY` | ✅ PASS |
+| `/mock/broken-tcp.js` | AAAA points to an unroutable blackhole | `BROKEN_IPV6_TCP` | ✅ PASS |
+| `/mock/broken-tls.js` | Certificate Common Name mismatch | `BROKEN_IPV6_TLS` | ✅ PASS |
+| `/mock/broken-http-500.json` | Returns HTTP 500 Internal Server Error | `BROKEN_IPV6_HTTP` | ✅ PASS |
 
 ### Confusion Matrix Metrics:
 $$\text{Precision} = \frac{TP}{TP + FP} = \frac{6}{6 + 0} = \mathbf{100\%}$$
@@ -108,8 +114,9 @@ $$F_1\text{-Score} = \mathbf{1.0}$$
 │
 ├── src/
 │   ├── api.py                               # FastAPI application & REST endpoints
+│   ├── jobs.py                               # Durable SQLite background audit job queue
 │   ├── keepalive.py                          # Background anti-sleep pinger for cloud hosting
-│   ├── config.py                             # Environment and timeout configurations
+│   ├── config.py                             # Environment, SSRF and timeout configurations
 │   ├── benchmark/                            # 30-site empirical measurement suite
 │   │   ├── runner.py                         # National benchmark batch executor
 │   │   └── targets.py                        # 30 target domains across 6 sectors
@@ -117,7 +124,7 @@ $$F_1\text{-Score} = \mathbf{1.0}$$
 │   │   ├── browser.py                        # Playwright automation & network listener
 │   │   └── collector.py                      # Subresource classification & graph builder
 │   ├── diagnostics/                          # 4-stage protocol diagnostic engine
-│   │   ├── pipeline.py                       # Stage orchestrator & blast radius evaluator
+│   │   ├── pipeline.py                       # Stage orchestrator & provenance evaluator
 │   │   ├── dns_stage.py                      # AAAA resolution, NS parity & DNS64 filter
 │   │   ├── tcp_stage.py                      # Pure AF_INET6 socket connection probe
 │   │   ├── tls_stage.py                      # TLS handshake, SNI & certificate validator
@@ -125,9 +132,9 @@ $$F_1\text{-Score} = \mathbf{1.0}$$
 │   ├── testbed/                              # Ground-truth verification environment
 │   │   ├── server.py                         # Multi-port mock server with seeded failures
 │   │   ├── manifest.py                       # Ground-truth test asset definitions
-│   │   └── verifier.py                       # Confusion matrix & metrics calculator
+│   │   └── verifier.py                       # Live TestClient evaluation & confusion matrix
 │   ├── telemetry/                            # Client network context & resolver probe
-│   │   └── context.py                        # Client IPv6 capability & ASN detection
+│   │   └── context.py                        # Multi-provider ASN & IPv6 capability probe
 │   └── web/                                  # Web visualizer frontend
 │       ├── static/                           # Dark-themed JavaScript visualizer & CSS
 │       └── templates/                        # Dashboard HTML structure
@@ -145,7 +152,8 @@ $$F_1\text{-Score} = \mathbf{1.0}$$
 │
 ├── tests/                                    # Automated pytest verification suite
 │   ├── test_diagnostics.py                   # 4-stage engine & DNS64 filter tests
-│   └── test_testbed.py                       # Synthetic testbed precision/recall assertions
+│   ├── test_testbed.py                       # Synthetic testbed precision/recall assertions
+│   └── test_production.py                    # SSRF security, auth, trace, & SQLite job tests
 │
 └── docs/                                     # Additional technical documentation
     ├── deployment_guide.md                   # Cloud & local deployment guide
@@ -187,7 +195,13 @@ This boots both services concurrently:
 ```bash
 pytest tests/ -v
 ```
-Executes all 8 test suites verifying the 4-stage pipeline, DNS64 synthetic prefix filters, and 100% precision/recall testbed metrics.
+Executes all **13 test suites** validating:
+- 4-stage diagnostic pipeline (DNS, TCP, TLS, HTTP)
+- Vantage-point aware infrastructure verification
+- Synthetic DNS64 prefix filtering (RFC 6052)
+- RFC 3901 Authoritative Nameserver parity
+- 100% precision and recall on the controlled testbed
+- SSRF blocking, request tracing, API key gates, and durable job stores
 
 ---
 
@@ -195,7 +209,7 @@ Executes all 8 test suites verifying the 4-stage pipeline, DNS64 synthetic prefi
 
 AIORI includes a companion Manifest V3 Chrome Extension that audits any open tab in real time via the Chrome Side Panel:
 
-1. Open Google Chrome and navigate to `chrome://extensions`.
+1. Open Google Chrome, Brave, or Microsoft Edge and navigate to `chrome://extensions`.
 2. Enable **Developer mode** (toggle in top-right corner).
 3. Click **Load unpacked** and select the [`extension/`](./extension) folder in this repository.
 4. Pin the **AIORI IPv6 Auditor** icon to your toolbar.
@@ -209,5 +223,4 @@ AIORI includes a companion Manifest V3 Chrome Extension that audits any open tab
 
 * **Team Code**: `A3-PS027-TC190`
 * **Project**: AIORI // IPv6 Readiness & Dependency Auditor
-* **Regional Hackathon Date**: November 26, 2026
 * **Initiative**: AIORI 3.0 (NIXI & IIFON)
