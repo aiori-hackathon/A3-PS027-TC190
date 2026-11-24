@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlInput && urlInput.value) {
         runAudit(urlInput.value);
     }
+
+    // Keep Render container active while user or judge has dashboard open
+    setInterval(() => {
+        fetch('/api/health', { cache: 'no-store' }).catch(() => {});
+    }, 150000);
 });
 
 function initNavigation() {

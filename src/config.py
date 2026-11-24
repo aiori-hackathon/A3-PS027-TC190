@@ -24,7 +24,9 @@ CORS_ORIGINS = [
     for origin in os.environ.get("CORS_ORIGINS", "http://localhost:8000").split(",")
     if origin.strip()
 ]
-ENABLE_KEEPALIVE = os.environ.get("ENABLE_KEEPALIVE", "false").lower() == "true"
+ENABLE_KEEPALIVE = os.environ.get("ENABLE_KEEPALIVE", "true").lower() in ("1", "true", "yes")
+KEEP_ALIVE_URL = os.environ.get("KEEP_ALIVE_URL", "https://a3-ps027-tc190.onrender.com")
+KEEPALIVE_INTERVAL_SECONDS = int(os.environ.get("KEEPALIVE_INTERVAL_SECONDS", "240"))
 AUDIT_API_KEY = os.environ.get("AUDIT_API_KEY", "")
 
 # Timeouts (seconds)

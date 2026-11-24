@@ -7,7 +7,11 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
-    TESTBED_PORT=8888
+    TESTBED_PORT=8888 \
+    RENDER=true \
+    ENABLE_KEEPALIVE=true \
+    KEEP_ALIVE_URL=https://a3-ps027-tc190.onrender.com \
+    KEEPALIVE_INTERVAL_SECONDS=240
 
 # Copy and install Python dependencies
 COPY requirements.txt .

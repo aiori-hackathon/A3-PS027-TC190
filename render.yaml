@@ -12,3 +12,11 @@ services:
         value: "false"
       - key: CLEAN_PORTS
         value: "false"
+      - key: RENDER
+        value: "true"
+      - key: ENABLE_KEEPALIVE
+        value: "true"
+      - key: KEEP_ALIVE_URL
+        value: "https://a3-ps027-tc190.onrender.com"
+      - key: KEEPALIVE_INTERVAL_SECONDS
+        value: "240"

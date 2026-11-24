@@ -1,0 +1,26 @@
+name: Render Anti-Sleep Keepalive
+
+on:
+  schedule:
+    # Runs every 10 minutes to prevent Render free-tier hibernation
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  keepalive:
+    name: Ping Render Production Service
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Health Endpoint
+        run: |
+          echo "Sending keepalive ping to Render production service..."
+          RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}\nTIME:%{time_total}s\n" --max-time 25 "https://a3-ps027-tc190.onrender.com/api/health" || true)
+          echo "$RESPONSE"
+          if echo "$RESPONSE" | grep -q "healthy"; then
+            echo "Render service is warm and healthy."
+          else
+            echo "Warning: Response did not contain healthy status, waking up container..."
+            # Wake-up secondary probe to readiness endpoint
+            curl -sS --max-time 30 "https://a3-ps027-tc190.onrender.com/api/ready" || true
+          fi
