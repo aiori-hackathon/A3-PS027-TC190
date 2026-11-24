@@ -170,7 +170,8 @@ async def readiness_check():
         "browser_runtime": browser_ready,
     })
 
-@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.head("/", include_in_schema=False)
 async def serve_dashboard():
     """Serves the primary web dashboard."""
     index_path = TEMPLATES_DIR / "index.html"

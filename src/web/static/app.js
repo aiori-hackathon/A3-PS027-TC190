@@ -179,7 +179,9 @@ async function runAudit(url) {
 
         if (auditStatusPill) {
             auditStatusPill.className = 'status-pill status-ready';
-            auditStatusPill.innerText = `Audit Complete | ${data.metrics?.readiness_score_percent || 0}% Ready`;
+            const prov = data.apex_audit?.provenance;
+            const provLabel = prov === 'INFERRED_INFRASTRUCTURE' ? ' (Inferred)' : '';
+            auditStatusPill.innerText = `Audit Complete | ${data.metrics?.readiness_score_percent || 0}% Ready${provLabel}`;
         }
     } catch (err) {
         console.error(err);
@@ -250,7 +252,9 @@ function renderResourceTable(resources) {
     resources.forEach(r => {
         const tr = document.createElement('tr');
         let statusBadge = '<span class="badge badge-ready">IPv6 Ready</span>';
-        if (r.is_ipv4_literal || r.status === 'IPV4_LITERAL_DEPENDENCY') {
+        if (r.status === 'INFRASTRUCTURE_VERIFIED') {
+            statusBadge = '<span class="badge badge-ready" title="IPv6 wire probe unavailable on scanner host; validated via Global Unicast AAAA and RFC 3901 NS parity">Inferred (Dual-Stack)</span>';
+        } else if (r.is_ipv4_literal || r.status === 'IPV4_LITERAL_DEPENDENCY') {
             statusBadge = '<span class="badge badge-broken" title="Raw IPv4 literal breaks on IPv6 networks (RFC 6052)">IPv4 Literal (RFC 6052)</span>';
         } else if (r.status === 'IPV4_ONLY_DEPENDENCY') {
             statusBadge = '<span class="badge badge-v4only">IPv4 Only (No AAAA)</span>';
