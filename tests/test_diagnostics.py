@@ -47,7 +47,7 @@ def test_pipeline_ipv6_ready_site():
         assert res["overall_status"] == "FULL_IPV6_READY"
         assert res["is_ipv6_ready"] is True
     else:
-        assert res["overall_status"] == "BROKEN_IPV6_TCP"
+        assert res["overall_status"] in ["BROKEN_IPV6_TCP", "SCANNER_NO_IPV6_ROUTE"]
         assert res["failed_at_stage"] == "TCP"
 
 def test_pipeline_ipv4_only_site():

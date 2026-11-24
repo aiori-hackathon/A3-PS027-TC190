@@ -46,26 +46,29 @@ def run_auditor():
     uvicorn.run(auditor_app, host=API_HOST, port=API_PORT, log_level="info")
 
 def main():
-    # 1. Clean up any leftover processes on ports 8000 and 8888
-    free_port(API_PORT)
-    free_port(TESTBED_PORT)
-    time.sleep(0.3)
+    # Port cleanup is a local-development convenience and is disabled by default.
+    if os.environ.get("CLEAN_PORTS", "false").lower() == "true":
+        free_port(API_PORT)
+        free_port(TESTBED_PORT)
+        time.sleep(0.3)
 
     print("=" * 70)
     print("  AIORI 3.0 Hackathon — Team A3-PS027-TC190")
     print("  PS-027: IPv6 Website and Dependency Readiness Auditor")
     print("=" * 70)
-    print(f"  [1] Controlled Testbed:  http://localhost:{TESTBED_PORT}")
+    testbed_enabled = os.environ.get("ENABLE_TESTBED", "true").lower() == "true"
+    if testbed_enabled:
+        print(f"  [1] Controlled Testbed:  http://localhost:{TESTBED_PORT}")
     print(f"  [2] Auditor Dashboard:   http://localhost:{API_PORT}")
     print(f"  [3] OpenAPI Swagger:     http://localhost:{API_PORT}/docs")
     print("=" * 70)
 
-    # 2. Launch testbed in background daemon thread
-    tb_thread = threading.Thread(target=run_testbed, daemon=True)
-    tb_thread.start()
-    time.sleep(0.8)
+    if testbed_enabled:
+        tb_thread = threading.Thread(target=run_testbed, daemon=True)
+        tb_thread.start()
+        time.sleep(0.8)
 
-    # 3. Launch main auditor
+    # Launch main auditor
     run_auditor()
 
 if __name__ == "__main__":

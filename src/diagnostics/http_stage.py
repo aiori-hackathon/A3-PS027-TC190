@@ -33,7 +33,7 @@ class HTTPDiagnostic:
         t0 = time.perf_counter()
         parsed = urlparse(url)
         scheme = parsed.scheme.lower() or "https"
-        host = parsed.netloc.split(":")[0]
+        host = parsed.hostname or ""
         port = parsed.port or (443 if scheme == "https" else 80)
         path = parsed.path or "/"
         if parsed.query:

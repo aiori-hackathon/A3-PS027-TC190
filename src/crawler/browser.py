@@ -6,6 +6,8 @@ and capture runtime dependencies.
 
 import time
 import logging
+import ipaddress
+import socket
 from urllib.parse import urlparse
 from typing import Dict, Any, List, Optional
 from playwright.sync_api import sync_playwright, Page, Request, Response
@@ -28,7 +30,9 @@ class BrowserCrawler:
             target_url = "https://" + target_url
 
         parsed_target = urlparse(target_url)
-        apex_domain = parsed_target.netloc.split(":")[0].lower()
+        apex_domain = (parsed_target.hostname or "").lower()
+        if parsed_target.scheme not in {"http", "https"} or not BrowserCrawler._is_public_hostname(apex_domain):
+            raise ValueError("Target must be a public HTTP or HTTPS hostname")
 
         intercepted_requests: List[Dict[str, Any]] = []
         visited_urls = set()
@@ -60,7 +64,12 @@ class BrowserCrawler:
                     return
 
                 parsed_req = urlparse(req_url)
-                req_domain = parsed_req.netloc.split(":")[0].lower()
+                req_domain = (parsed_req.hostname or "").lower()
+                if not BrowserCrawler._is_public_hostname(req_domain):
+                    return
+                if len(intercepted_requests) >= 500:
+                    return
+
                 is_first_party = (
                     req_domain == apex_domain or
                     req_domain.endswith("." + apex_domain)
@@ -142,3 +151,26 @@ class BrowserCrawler:
             "total_crawl_time_ms": total_time_ms,
             "requests": intercepted_requests
         }
+
+    @staticmethod
+    def _is_public_hostname(hostname: str) -> bool:
+        if not hostname:
+            return False
+        try:
+            address = ipaddress.ip_address(hostname)
+            return address.is_global
+        except ValueError:
+            pass
+        try:
+            answers = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False
+        if not answers:
+            return False
+        for answer in answers:
+            try:
+                if not ipaddress.ip_address(answer[4][0].split("%", 1)[0]).is_global:
+                    return False
+            except ValueError:
+                return False
+        return True

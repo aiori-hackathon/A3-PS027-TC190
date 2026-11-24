@@ -64,40 +64,40 @@ async def index():
 @app.get("/static/valid-dualstack.css")
 async def valid_css():
     css = "body { font-family: system-ui, sans-serif; background: #0b132b; color: #fff; } .container { max-width: 800px; margin: 40px auto; }"
-    return Response(content=css, media_type="text/css")
+    return Response(content=css, media_type="text/css", headers={"X-AIORI-Diagnostic-Status": "FULL_IPV6_READY"})
 
 @app.get("/static/valid-dualstack.js")
 async def valid_js():
     js = "console.log('Valid dual-stack script loaded successfully');"
-    return Response(content=js, media_type="application/javascript")
+    return Response(content=js, media_type="application/javascript", headers={"X-AIORI-Diagnostic-Status": "FULL_IPV6_READY"})
 
 @app.get("/mock/seeded-ipv4-only.css")
 async def mock_v4_css():
     css = "/* Seeded IPv4-Only CSS */ #v4-banner { border: 2px solid #ff4d4f; }"
-    return Response(content=css, media_type="text/css")
+    return Response(content=css, media_type="text/css", headers={"X-AIORI-Diagnostic-Status": "IPV4_ONLY_DEPENDENCY", "X-AIORI-Diagnostic-Stage": "DNS"})
 
 @app.get("/mock/seeded-ipv4-only.js")
 async def mock_v4_js():
     js = "console.log('Seeded IPv4-only script executed');"
-    return Response(content=js, media_type="application/javascript")
+    return Response(content=js, media_type="application/javascript", headers={"X-AIORI-Diagnostic-Status": "IPV4_ONLY_DEPENDENCY", "X-AIORI-Diagnostic-Stage": "DNS"})
 
 @app.get("/mock/seeded-ipv4-only.png")
 async def mock_v4_png():
     # 1x1 transparent PNG bytes
     png_bytes = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
-    return Response(content=png_bytes, media_type="image/png")
+    return Response(content=png_bytes, media_type="image/png", headers={"X-AIORI-Diagnostic-Status": "IPV4_ONLY_DEPENDENCY", "X-AIORI-Diagnostic-Stage": "DNS"})
 
 @app.get("/mock/broken-tcp.js")
 async def mock_broken_tcp():
-    return Response(content="console.log('Simulated TCP response');", media_type="application/javascript")
+    return Response(content="console.log('Simulated TCP response');", media_type="application/javascript", headers={"X-AIORI-Diagnostic-Status": "BROKEN_IPV6_TCP", "X-AIORI-Diagnostic-Stage": "TCP"})
 
 @app.get("/mock/broken-tls.js")
 async def mock_broken_tls():
-    return Response(content="console.log('Simulated TLS response');", media_type="application/javascript")
+    return Response(content="console.log('Simulated TLS response');", media_type="application/javascript", headers={"X-AIORI-Diagnostic-Status": "BROKEN_IPV6_TLS", "X-AIORI-Diagnostic-Stage": "TLS"})
 
 @app.get("/mock/broken-http-500.json")
 async def mock_broken_http():
-    return JSONResponse(status_code=500, content={"error": "IPv6 Origin Gateway Failure (HTTP 500)"})
+    return JSONResponse(status_code=500, content={"error": "IPv6 Origin Gateway Failure (HTTP 500)"}, headers={"X-AIORI-Diagnostic-Status": "BROKEN_IPV6_HTTP", "X-AIORI-Diagnostic-Stage": "HTTP"})
 
 def start_testbed():
     """Starts the testbed server synchronously."""

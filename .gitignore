@@ -16,3 +16,6 @@ __pycache__/
 
 # Playwright browser downloads
 .local-browsers/
+
+# Runtime SQLite state
+data/

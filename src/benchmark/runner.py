@@ -84,9 +84,9 @@ class BenchmarkRunner:
                 detected_ipv4_literals.append(h)
 
             diag = host_audits.get(h, {})
-            is_ready = diag.get("is_ipv6_ready", False)
-            status = diag.get("overall_status", "UNKNOWN")
-            failed_stage = diag.get("failed_at_stage")
+            is_ready = diag.get("is_ipv6_ready", False) and not is_literal
+            status = "IPV4_LITERAL_DEPENDENCY" if is_literal else diag.get("overall_status", "UNKNOWN")
+            failed_stage = "DNS" if is_literal else diag.get("failed_at_stage")
 
             if is_ready:
                 ipv6_ready_resources += 1
@@ -110,6 +110,7 @@ class BenchmarkRunner:
                 "is_ipv6_ready": is_ready,
                 "status": status,
                 "failed_stage": failed_stage,
+                "is_ipv4_literal": is_literal,
                 "criticality_weight": weight
             })
 

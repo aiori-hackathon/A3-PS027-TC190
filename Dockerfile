@@ -17,12 +17,16 @@ RUN playwright install chromium
 # Copy project files
 COPY . .
 
+# Run the service without root privileges in production.
+RUN chown -R pwuser:pwuser /app
+USER pwuser
+
 # Expose primary dashboard and testbed ports
 EXPOSE 8000 8888
 
 # Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/api/ready || exit 1
 
 # Start the unified runner
 CMD ["python", "run.py"]

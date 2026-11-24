@@ -6,7 +6,6 @@ and parallel IPv4 baseline verification for any discovered resource.
 
 import time
 import logging
-import ipaddress
 from urllib.parse import urlparse
 from typing import Dict, Any, Optional
 
@@ -35,7 +34,7 @@ class DiagnosticPipeline:
         t_pipeline_start = time.perf_counter()
         parsed = urlparse(url)
         scheme = parsed.scheme.lower() or "https"
-        host = parsed.netloc.split(":")[0]
+        host = parsed.hostname or ""
         port = parsed.port or (443 if scheme == "https" else 80)
 
         report: Dict[str, Any] = {
@@ -96,40 +95,24 @@ class DiagnosticPipeline:
         )
         report["stages"]["tcp"] = tcp_res
 
-        # Check if failure is due to scanner host environment lacking IPv6 egress (e.g. Render container)
-        is_host_v4_only = (TelemetryCollector.get_local_interfaces().get("ipv6") is None)
-        is_target_global = False
-        try:
-            parsed_ip = ipaddress.IPv6Address(ipv6_addr)
-            is_target_global = (
-                parsed_ip.is_global and 
-                not ipv6_addr.startswith("100::") and 
-                not ipv6_addr.startswith("64:ff9b:")
-            )
-        except Exception:
-            is_target_global = False
-
-        if tcp_res["status"] != "TCP_SUCCESS" and is_host_v4_only and is_target_global and tcp_res["status"] == "TCP_NO_ROUTE":
-            # Target publishes valid Global Unicast IPv6 infrastructure, but host container lacks native IPv6 egress route.
-            # Validate TCP via baseline reachability and infrastructure verification.
-            tcp_res["status"] = "TCP_SUCCESS"
-            tcp_res["rtt_ms"] = round(dns_res.get("latency_ms", 15.0) + 12.0, 2)
-            tcp_res["error_detail"] = None
-
         if tcp_res["status"] != "TCP_SUCCESS":
-            report["overall_status"] = "BROKEN_IPV6_TCP"
+            local_interfaces = TelemetryCollector.get_local_interfaces()
+            if tcp_res["status"] == "TCP_NO_ROUTE" and local_interfaces.get("ipv6") is None:
+                report["overall_status"] = "SCANNER_NO_IPV6_ROUTE"
+                report["failure_reason"] = "The scanner environment has no native IPv6 route"
+            else:
+                report["overall_status"] = "BROKEN_IPV6_TCP"
+                report["failure_reason"] = tcp_res.get("error_detail")
             report["failed_at_stage"] = "TCP"
-            report["failure_reason"] = tcp_res.get("error_detail")
             report["total_time_ms"] = round((time.perf_counter() - t_pipeline_start) * 1000, 2)
             return report
 
         # ---------------- STAGE 3: TLS Handshake (if HTTPS) ----------------
         active_ssl_sock = None
         if scheme == "https":
-            target_connect_ip = report["ipv4_baseline"].get("target_ipv4") if (active_sock is None and is_host_v4_only) else ipv6_addr
             tls_res, active_ssl_sock = self.tls_stage.diagnose_ipv6(
                 hostname=host,
-                ipv6_addr=target_connect_ip or ipv6_addr,
+                ipv6_addr=ipv6_addr,
                 port=port,
                 existing_socket=active_sock,
                 return_socket=True
@@ -144,10 +127,9 @@ class DiagnosticPipeline:
                 return report
 
         # ---------------- STAGE 4: HTTP Retrieval ----------------
-        target_http_ip = report["ipv4_baseline"].get("target_ipv4") if (active_ssl_sock is None and is_host_v4_only) else ipv6_addr
         http_res = self.http_stage.diagnose_ipv6(
             url=url,
-            ipv6_addr=target_http_ip or ipv6_addr,
+            ipv6_addr=ipv6_addr,
             existing_ssl_socket=active_ssl_sock,
             existing_tcp_socket=active_sock if scheme == "http" else None
         )

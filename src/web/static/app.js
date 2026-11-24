@@ -158,7 +158,7 @@ async function runAudit(url) {
         currentAuditData = data;
         renderAuditResults(data);
 
-        logToTerminal('SYSTEM', `Crawl complete. Discovered ${data.metrics?.total_resources || 0} sub-resources across ${data.metrics?.total_domains || 0} host domains.`);
+        logToTerminal('SYSTEM', `Crawl complete. Discovered ${data.metrics?.total_resources || 0} sub-resources across ${data.metrics?.unique_domains || 0} host domains.`);
         
         // Log individual host probe summaries to terminal
         if (data.host_diagnostics) {
@@ -250,7 +250,7 @@ function renderResourceTable(resources) {
     resources.forEach(r => {
         const tr = document.createElement('tr');
         let statusBadge = '<span class="badge badge-ready">IPv6 Ready</span>';
-        if (r.is_ipv4_literal) {
+        if (r.is_ipv4_literal || r.status === 'IPV4_LITERAL_DEPENDENCY') {
             statusBadge = '<span class="badge badge-broken" title="Raw IPv4 literal breaks on IPv6 networks (RFC 6052)">IPv4 Literal (RFC 6052)</span>';
         } else if (r.status === 'IPV4_ONLY_DEPENDENCY') {
             statusBadge = '<span class="badge badge-v4only">IPv4 Only (No AAAA)</span>';

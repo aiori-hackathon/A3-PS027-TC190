@@ -22,7 +22,7 @@ CONTROLLED_GROUND_TRUTH: Dict[str, Dict[str, Any]] = {
         "description": "Dual-stack compliant CSS stylesheet"
     },
     "seeded_ipv4_only_script": {
-        "url_path": "/static/seeded-ipv4-only.js",
+        "url_path": "/mock/seeded-ipv4-only.js",
         "mock_domain": "ipv4only.testbed.internal",
         "expected_status": "IPV4_ONLY_DEPENDENCY",
         "expected_failure_stage": "DNS",
@@ -30,7 +30,7 @@ CONTROLLED_GROUND_TRUTH: Dict[str, Dict[str, Any]] = {
         "description": "Deliberately seeded IPv4-only script (No AAAA record)"
     },
     "seeded_ipv4_only_css": {
-        "url_path": "/static/seeded-ipv4-only.css",
+        "url_path": "/mock/seeded-ipv4-only.css",
         "mock_domain": "legacy-cdn.testbed.internal",
         "expected_status": "IPV4_ONLY_DEPENDENCY",
         "expected_failure_stage": "DNS",
@@ -38,7 +38,7 @@ CONTROLLED_GROUND_TRUTH: Dict[str, Dict[str, Any]] = {
         "description": "Deliberately seeded IPv4-only stylesheet (No AAAA record)"
     },
     "seeded_ipv4_only_img": {
-        "url_path": "/static/seeded-ipv4-only.png",
+        "url_path": "/mock/seeded-ipv4-only.png",
         "mock_domain": "static-v4.testbed.internal",
         "expected_status": "IPV4_ONLY_DEPENDENCY",
         "expected_failure_stage": "DNS",

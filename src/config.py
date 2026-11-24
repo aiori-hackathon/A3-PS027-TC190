@@ -19,6 +19,13 @@ API_PORT = int(os.environ.get("PORT", os.environ.get("API_PORT", 8000)))
 TESTBED_PORT = int(os.environ.get("TESTBED_PORT", 8888))
 API_HOST = os.environ.get("API_HOST", "0.0.0.0")
 TESTBED_HOST = os.environ.get("TESTBED_HOST", "0.0.0.0")
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:8000").split(",")
+    if origin.strip()
+]
+ENABLE_KEEPALIVE = os.environ.get("ENABLE_KEEPALIVE", "false").lower() == "true"
+AUDIT_API_KEY = os.environ.get("AUDIT_API_KEY", "")
 
 # Timeouts (seconds)
 DNS_TIMEOUT = 2.5
@@ -69,3 +76,16 @@ BENCHMARK_SECTORS = [
     "SaaS, Cloud & Big Tech",
     "Banking & Financial Core"
 ]
+
+# Production API limits
+MAX_CONCURRENT_AUDITS = int(os.environ.get("MAX_CONCURRENT_AUDITS", "2"))
+AUDIT_TIMEOUT_SECONDS = float(os.environ.get("AUDIT_TIMEOUT_SECONDS", "120"))
+AUDIT_CACHE_TTL_SECONDS = float(os.environ.get("AUDIT_CACHE_TTL_SECONDS", "300"))
+AUDIT_RATE_LIMIT_REQUESTS = int(os.environ.get("AUDIT_RATE_LIMIT_REQUESTS", "10"))
+AUDIT_RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("AUDIT_RATE_LIMIT_WINDOW_SECONDS", "60"))
+MAX_AUDIT_URL_LENGTH = int(os.environ.get("MAX_AUDIT_URL_LENGTH", "2048"))
+
+# Durable job storage
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+AUDIT_DB_PATH = Path(os.environ.get("AUDIT_DB_PATH", str(DATA_DIR / "audit_jobs.sqlite3")))

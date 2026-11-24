@@ -45,7 +45,7 @@
     },
     {
       "asset_key": "seeded_ipv4_only_script",
-      "url_path": "/static/seeded-ipv4-only.js",
+      "url_path": "/mock/seeded-ipv4-only.js",
       "description": "Deliberately seeded IPv4-only script (No AAAA record)",
       "is_seeded_failure": true,
       "expected_status": "IPV4_ONLY_DEPENDENCY",
@@ -58,7 +58,7 @@
     },
     {
       "asset_key": "seeded_ipv4_only_css",
-      "url_path": "/static/seeded-ipv4-only.css",
+      "url_path": "/mock/seeded-ipv4-only.css",
       "description": "Deliberately seeded IPv4-only stylesheet (No AAAA record)",
       "is_seeded_failure": true,
       "expected_status": "IPV4_ONLY_DEPENDENCY",
@@ -71,7 +71,7 @@
     },
     {
       "asset_key": "seeded_ipv4_only_img",
-      "url_path": "/static/seeded-ipv4-only.png",
+      "url_path": "/mock/seeded-ipv4-only.png",
       "description": "Deliberately seeded IPv4-only image banner (No AAAA record)",
       "is_seeded_failure": true,
       "expected_status": "IPV4_ONLY_DEPENDENCY",
